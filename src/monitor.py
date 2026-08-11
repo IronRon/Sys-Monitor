@@ -1,12 +1,22 @@
 import time
 import psutil
 
+from collections import deque
+from datetime import datetime
+
 from collectors.cpu import get_cpu_usage
 from collectors.memory import get_memory_usage
 from collectors.disk import get_disk_usage
 from collectors.network import get_network_usage
-from collectors.processes import get_processes
+from collectors.processes import (
+    prime_process_cpu,
+    get_processes,
+    get_top_cpu_processes,
+    get_top_memory_processes,
+)
 
+HISTORY_SIZE = 60
+history = deque(maxlen=HISTORY_SIZE)
 
 SAMPLE_INTERVAL = 1
 
@@ -22,11 +32,14 @@ def bytes_to_gb(value):
 def main():
     print("Starting PC Performance Monitor...\n")
 
-    # Prime CPU measurement.
+    # Prime system CPU measurement.
     # The first non-blocking cpu_percent() reading is meaningless.
     # "Priming" means: Make an initial call so psutil has a baseline to compare the next call against.
     psutil.cpu_percent(interval=None)
     psutil.cpu_percent(interval=None, percpu=True)
+
+    # Prime process CPU measurements.
+    prime_process_cpu()
 
     previous_disk = get_disk_usage()
     previous_network = get_network_usage()
@@ -58,6 +71,16 @@ def main():
         ) / SAMPLE_INTERVAL
 
         processes = get_processes()
+
+        top_cpu_processes = get_top_cpu_processes(
+            processes,
+            limit=5,
+        )
+
+        top_memory_processes = get_top_memory_processes(
+            processes,
+            limit=5,
+        )
 
         print("=" * 60)
 
@@ -92,6 +115,42 @@ def main():
 
         print(
             f"Processes: {len(processes)}"
+        )
+
+        print("\nTOP CPU PROCESSES")
+
+        for process in top_cpu_processes:
+            print(
+                f"{process['name']:<30} "
+                f"PID {process['pid']:<8} "
+                f"{process['cpu_percent']:>6.2f}%"
+            )
+
+        print("\nTOP MEMORY PROCESSES")
+
+        for process in top_memory_processes:
+            print(
+                f"{process['name']:<30} "
+                f"PID {process['pid']:<8} "
+                f"{bytes_to_mb(process['memory_bytes']):>8.2f} MB"
+            )
+
+        sample = {
+            "timestamp": datetime.now(),
+            "cpu_percent": cpu["total_percent"],
+            "per_cpu_percent": cpu["per_cpu_percent"],
+            "memory_percent": memory["percent"],
+            "disk_read_mb_s": bytes_to_mb(disk_read_speed),
+            "disk_write_mb_s": bytes_to_mb(disk_write_speed),
+            "download_mb_s": bytes_to_mb(download_speed),
+            "upload_mb_s": bytes_to_mb(upload_speed),
+        }
+
+        history.append(sample)
+
+        print(
+            f"\nHistory samples: "
+            f"{len(history)}/{HISTORY_SIZE}"
         )
 
         previous_disk = disk
