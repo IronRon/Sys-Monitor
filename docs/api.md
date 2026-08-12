@@ -35,9 +35,90 @@ Current routes:
 | `GET`  | `/`            | Render the web dashboard                                |
 | `GET`  | `/api/system/` | Retrieve current monitoring data and recent CPU history |
 
-Only `/api/system/` is currently an API endpoint.
+Only `/api/system/` is currently an **API endpoint** because it returns machine-readable JSON.
 
-The `/` route returns HTML rather than JSON.
+The project also has normal Django HTML routes such as `/` and `/docs/.../`. These are web-page routes rather than API endpoints.
+
+---
+
+# Documentation Routes — Not API Endpoints
+
+The documentation feature introduces several Django routes, but they should not be confused with the JSON monitoring API.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `GET` | `/docs/` | Render the documentation homepage |
+| `GET` | `/docs/<slug>/` | Render one Markdown documentation page |
+
+Examples include:
+
+```text
+/docs/collectors/
+/docs/monitoring/
+/docs/architecture/
+/docs/api/
+/docs/frontend/
+/docs/concepts/
+```
+
+These routes return **HTML pages**. They do not return JSON and therefore are not currently considered part of the monitoring API.
+
+The generic route is defined using Django's path converter syntax:
+
+```python
+path(
+    "<slug:slug>/",
+    views.docs_page,
+    name="page",
+)
+```
+
+In `<slug:slug>`:
+
+```text
+first slug
+    ↓
+Django path converter/type
+
+second slug
+    ↓
+name of the value passed to the view
+```
+
+For a request to:
+
+```text
+/docs/architecture/
+```
+
+Django calls the view approximately as:
+
+```python
+docs_page(
+    request,
+    slug="architecture",
+)
+```
+
+The view then uses that value to select the approved Markdown document from `DOC_PAGES`.
+
+```mermaid
+flowchart LR
+    URL["/docs/architecture/"]
+    ROUTE["<slug:slug>/"]
+    VIEW["docs_page(request, slug='architecture')"]
+    REGISTRY["DOC_PAGES['architecture']"]
+    FILE["docs/architecture.md"]
+    HTML["Rendered HTML page"]
+
+    URL --> ROUTE
+    ROUTE --> VIEW
+    VIEW --> REGISTRY
+    REGISTRY --> FILE
+    FILE --> HTML
+```
+
+Using the `DOC_PAGES` registry also means the URL value is not blindly treated as an arbitrary file path. Only documentation pages explicitly registered by the application are exposed.
 
 ---
 

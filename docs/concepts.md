@@ -948,6 +948,285 @@ This allows different interfaces to format the same data differently.
 
 ---
 
+# Documentation Concepts
+
+## Markdown
+
+Markdown is a lightweight text format that uses simple characters to describe document structure.
+
+For example:
+
+```markdown
+# Heading
+
+**Bold text**
+
+- list item
+```
+
+is easier to write and maintain than manually writing all of the equivalent HTML.
+
+Sys Monitor keeps its technical documentation in `.md` files inside:
+
+```text
+docs/
+```
+
+---
+
+## Source of Truth
+
+A **source of truth** is the main authoritative copy of some information.
+
+For the documentation feature:
+
+```text
+docs/*.md
+```
+
+are the source of truth.
+
+The Django documentation pages are generated from these files rather than storing a second manually maintained copy of the same content in HTML templates.
+
+---
+
+## Markdown Renderer
+
+A Markdown renderer converts Markdown text into another format, usually HTML.
+
+Sys Monitor uses the Python `markdown` package.
+
+Conceptually:
+
+```text
+# CPU
+    ↓
+Markdown renderer
+    ↓
+<h1>CPU</h1>
+```
+
+The browser understands the generated HTML, not the original Markdown syntax.
+
+---
+
+## Dynamic Route
+
+A dynamic route contains part of the URL as a variable rather than defining every possible URL separately.
+
+Instead of writing one Django route for every documentation page:
+
+```text
+/docs/collectors/
+/docs/monitoring/
+/docs/architecture/
+```
+
+Sys Monitor uses one pattern:
+
+```python
+path(
+    "<slug:slug>/",
+    views.docs_page,
+    name="page",
+)
+```
+
+The variable part is passed to the Django view.
+
+---
+
+## Slug
+
+A **slug** is a short URL-friendly identifier.
+
+Examples:
+
+```text
+collectors
+monitoring
+architecture
+frontend
+```
+
+In Django:
+
+```text
+<slug:slug>
+```
+
+contains two different uses of the word `slug`:
+
+```text
+<converter:variable_name>
+```
+
+Therefore:
+
+```text
+<slug:slug>
+   │    │
+   │    └── Python argument name
+   │
+   └── Django URL converter
+```
+
+For:
+
+```text
+/docs/architecture/
+```
+
+Django extracts:
+
+```python
+slug = "architecture"
+```
+
+and calls the documentation view with that value.
+
+The variable could have been given another name:
+
+```python
+path(
+    "<slug:page_name>/",
+    views.docs_page,
+)
+```
+
+which would require the view to accept `page_name` instead.
+
+---
+
+## Path Converter
+
+A Django path converter controls what kind of URL text is accepted and converts it into a value passed to the view.
+
+Examples include:
+
+```text
+<int:id>
+<slug:slug>
+<str:name>
+```
+
+The documentation route uses the `slug` converter because documentation names such as `architecture` and `frontend` are URL-friendly identifiers.
+
+---
+
+## Documentation Registry / Whitelist
+
+Sys Monitor stores the allowed documentation pages in `DOC_PAGES`.
+
+For example:
+
+```python
+DOC_PAGES = {
+    "architecture": {
+        "title": "Architecture",
+        "filename": "architecture.md",
+    },
+}
+```
+
+The slug selects an entry from this registry.
+
+This serves two purposes:
+
+1. It provides metadata for navigation and page titles.
+2. It prevents arbitrary URL values from being treated directly as file paths.
+
+Only files deliberately registered by the application are exposed as documentation pages.
+
+---
+
+## Template Inheritance
+
+Django template inheritance allows multiple pages to share one common layout.
+
+The documentation site uses:
+
+```text
+base.html
+    ↓
+shared sidebar, page shell and static files
+
+index.html / page.html
+    ↓
+page-specific content
+```
+
+A child template uses:
+
+```django
+{% extends "documentation/base.html" %}
+```
+
+and fills named blocks defined by the base template.
+
+This prevents duplicated navigation and layout HTML across every documentation page.
+
+---
+
+## `safe` Template Filter
+
+Django normally escapes HTML values before displaying them.
+
+This protects pages from accidentally rendering potentially dangerous HTML.
+
+The Markdown renderer deliberately produces HTML, so the documentation template uses:
+
+```django
+{{ content_html|safe }}
+```
+
+This tells Django to render the generated HTML rather than display the HTML tags as text.
+
+This is appropriate here because the Markdown files are trusted project files. It should not be blindly used with untrusted user input.
+
+---
+
+## Mermaid
+
+Mermaid is a JavaScript diagramming library that converts text definitions into diagrams.
+
+Example source:
+
+```text
+flowchart LR
+    A --> B
+```
+
+can be rendered as a graphical flowchart.
+
+Sys Monitor stores Mermaid definitions inside Markdown code fences.
+
+Python-Markdown turns the fenced block into HTML code, and the browser-side Mermaid library performs the second step that turns the diagram text into SVG graphics.
+
+```text
+Markdown
+    ↓
+Python-Markdown
+    ↓
+HTML code block
+    ↓
+Mermaid.js
+    ↓
+SVG diagram
+```
+
+---
+
+## CDN
+
+A **CDN** — Content Delivery Network — hosts files that a web page can load over the internet.
+
+The current project loads libraries such as Chart.js and Mermaid from a CDN instead of storing their JavaScript files directly inside the project.
+
+This is convenient during development, but it also means those libraries may require internet access when first loaded.
+
+---
+
 # Key Ideas Learned So Far
 
 The main new ideas introduced by the project so far include:
@@ -987,5 +1266,15 @@ The main new ideas introduced by the project so far include:
 * `.map()`
 * Chart.js
 * frontend/backend separation
+* Markdown
+* Markdown rendering
+* dynamic Django routes
+* slugs and path converters
+* documentation registries
+* template inheritance
+* Django's `safe` template filter
+* Mermaid diagrams
+* CDNs
+* source-of-truth documentation
 
 These concepts will continue to become more concrete as Sys Monitor grows.

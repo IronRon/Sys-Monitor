@@ -1,0 +1,84 @@
+{% extends "documentation/base.html" %}
+
+
+{% block title %}
+    Documentation | Sys Monitor
+{% endblock %}
+
+
+{% block content %}
+
+<section class="docs-hero">
+
+    <span class="eyebrow">
+        SYS MONITOR
+    </span>
+
+    <h1>
+        Documentation
+    </h1>
+
+    <p>
+        Technical documentation and learning notes
+        for the Windows system monitoring project.
+    </p>
+
+</section>
+
+
+<section class="docs-card-grid">
+
+    {% for item in docs_pages %}
+
+        <a
+            class="docs-card"
+            href="{% url 'documentation:page' item.slug %}"
+        >
+
+            <h2>
+                {{ item.title }}
+            </h2>
+
+            <p>
+                {{ item.description }}
+            </p>
+
+            <span>
+                Read documentation →
+            </span>
+
+        </a>
+
+    {% endfor %}
+
+</section>
+
+
+<section class="docs-overview">
+
+    <h2>
+        System Overview
+    </h2>
+
+    <pre class="architecture-overview">
+Windows
+   ↓
+psutil
+   ↓
+Collectors
+   ↓
+SystemSampler
+   ↓
+MonitorHistory
+   ↓
+├── Terminal Monitor
+└── Django API
+       ↓
+    JavaScript
+       ↓
+    Dashboard
+    </pre>
+
+</section>
+
+{% endblock %}

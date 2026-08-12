@@ -1,0 +1,95 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        {% block title %}
+            Sys Monitor Documentation
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{% static 'documentation/css/docs.css' %}"
+    >
+</head>
+
+<body>
+
+    <div class="docs-layout">
+
+        <aside class="docs-sidebar">
+
+            <div class="docs-brand">
+                <a href="{% url 'documentation:index' %}">
+                    Sys Monitor
+                </a>
+
+                <span>Documentation</span>
+            </div>
+
+
+            <nav class="docs-nav">
+
+                <a
+                    class="docs-nav-home"
+                    href="{% url 'documentation:index' %}"
+                >
+                    Overview
+                </a>
+
+                {% for item in docs_pages %}
+
+                    <a
+                        href="{% url 'documentation:page' item.slug %}"
+
+                        {% if page.slug == item.slug %}
+                            class="active"
+                        {% endif %}
+                    >
+                        {{ item.title }}
+                    </a>
+
+                {% endfor %}
+
+            </nav>
+
+
+            <div class="sidebar-footer">
+
+                <a href="/">
+                    ← Return to Dashboard
+                </a>
+
+            </div>
+
+        </aside>
+
+
+        <main class="docs-main">
+
+            {% block content %}
+            {% endblock %}
+
+        </main>
+
+    </div>
+
+
+    <script
+        type="module"
+        src="{% static 'documentation/js/docs.js' %}"
+    ></script>
+
+</body>
+
+</html>

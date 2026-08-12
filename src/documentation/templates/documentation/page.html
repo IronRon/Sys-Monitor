@@ -1,0 +1,57 @@
+{% extends "documentation/base.html" %}
+
+
+{% block title %}
+    {{ page.title }} | Sys Monitor Docs
+{% endblock %}
+
+
+{% block content %}
+
+<div class="docs-page-layout">
+
+    <article class="docs-article">
+
+        <header class="article-header">
+
+            <span class="eyebrow">
+                DOCUMENTATION
+            </span>
+
+            <h1>
+                {{ page.title }}
+            </h1>
+
+            <p>
+                {{ page.description }}
+            </p>
+
+        </header>
+
+
+        <div class="markdown-content">
+
+            {{ content_html|safe }}
+
+        </div>
+
+    </article>
+
+
+    {% if toc_html %}
+
+        <aside class="table-of-contents">
+
+            <span class="toc-title">
+                ON THIS PAGE
+            </span>
+
+            {{ toc_html|safe }}
+
+        </aside>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

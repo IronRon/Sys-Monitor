@@ -82,6 +82,183 @@ src/dashboard/
 
 ---
 
+# Documentation Frontend
+
+The project now also contains a separate Django application for technical documentation:
+
+```text
+src/documentation/
+├── views.py
+├── urls.py
+├── templates/
+│   └── documentation/
+│       ├── base.html
+│       ├── index.html
+│       └── page.html
+└── static/
+    └── documentation/
+        ├── css/
+        │   └── docs.css
+        └── js/
+            └── docs.js
+```
+
+Unlike the live dashboard, the documentation pages do not retrieve monitoring JSON every second. Their job is to turn the Markdown files in the project's top-level `docs/` directory into readable web pages.
+
+The Markdown files remain the **source of truth**:
+
+```text
+docs/architecture.md
+        ↓
+Python-Markdown
+        ↓
+HTML
+        ↓
+Django template
+        ↓
+Browser
+```
+
+This avoids maintaining one copy of the documentation in Markdown and another copy manually written in HTML.
+
+## Python-Markdown Rendering
+
+The documentation view reads the selected `.md` file as ordinary text:
+
+```python
+markdown_text = markdown_path.read_text(
+    encoding="utf-8"
+)
+```
+
+The Python `markdown` package then converts Markdown syntax into HTML:
+
+```python
+renderer = markdown.Markdown(
+    extensions=[
+        "extra",
+        "toc",
+        "sane_lists",
+    ]
+)
+
+content_html = renderer.convert(
+    markdown_text
+)
+```
+
+For example:
+
+```markdown
+# CPU
+
+**CPU** means Central Processing Unit.
+```
+
+becomes HTML similar to:
+
+```html
+<h1>CPU</h1>
+<p><strong>CPU</strong> means Central Processing Unit.</p>
+```
+
+The generated HTML is passed to the generic documentation template as `content_html`.
+
+Because this HTML comes from trusted Markdown files maintained inside the project, the template renders it using:
+
+```django
+{{ content_html|safe }}
+```
+
+Normally Django escapes HTML. The `safe` filter tells Django that this already-generated HTML should be rendered instead of displayed as literal `<h1>`, `<p>`, and other tags.
+
+This should **not** be used blindly for untrusted user-submitted Markdown without sanitising it first.
+
+## One Generic Page Template
+
+All documentation topics use the same template:
+
+```text
+documentation/page.html
+```
+
+The selected page title, description, rendered Markdown and table of contents are passed into that template by the view.
+
+This means there is no need for separate templates such as:
+
+```text
+collectors.html
+monitoring.html
+architecture.html
+api.html
+```
+
+The content changes while the layout remains reusable.
+
+## Mermaid Diagram Rendering
+
+Python-Markdown converts a fenced Mermaid block into an HTML code block, but it does **not** itself draw the diagram.
+
+For example:
+
+````markdown
+```mermaid
+flowchart LR
+    A --> B
+```
+````
+
+first becomes HTML approximately like:
+
+```html
+<pre>
+    <code class="language-mermaid">
+        flowchart LR
+        A --> B
+    </code>
+</pre>
+```
+
+Then `documentation/js/docs.js` runs in the browser.
+
+It:
+
+1. Finds code blocks with the `language-mermaid` class.
+2. Changes them into elements Mermaid understands.
+3. Loads the Mermaid JavaScript library.
+4. Asks Mermaid to parse the diagram text.
+5. Mermaid generates an SVG diagram in the page.
+
+```mermaid
+flowchart LR
+    MD["Markdown Mermaid block"]
+    PM["Python-Markdown"]
+    CODE["HTML code block"]
+    JS["docs.js"]
+    MERMAID["Mermaid.js"]
+    SVG["SVG diagram"]
+
+    MD --> PM
+    PM --> CODE
+    CODE --> JS
+    JS --> MERMAID
+    MERMAID --> SVG
+```
+
+Therefore two separate renderers are involved:
+
+```text
+Python-Markdown
+    ↓
+renders Markdown as HTML
+
+Mermaid.js
+    ↓
+renders Mermaid diagram text as graphics
+```
+
+---
+
 # Django Template
 
 The main dashboard page is:
@@ -1248,29 +1425,40 @@ Processes
 
 # Current Frontend Architecture
 
+The project now has two browser-facing areas: the live monitoring dashboard and the documentation site.
+
 ```mermaid
 flowchart TD
-    TEMPLATE["Django Template<br/>index.html"]
+    subgraph Dashboard["Live Dashboard"]
+        TEMPLATE["dashboard/index.html"]
+        CSS["dashboard.css"]
+        JS["dashboard.js"]
+        API["/api/system/"]
+        CHART["Chart.js"]
+        DOM["Dashboard DOM"]
 
-    CSS["dashboard.css"]
+        TEMPLATE --> DOM
+        CSS --> DOM
+        API -->|"JSON"| JS
+        JS -->|"textContent"| DOM
+        JS --> CHART
+        CHART -->|"draws on canvas"| DOM
+    end
 
-    JS["dashboard.js"]
+    subgraph Docs["Documentation Site"]
+        MD["docs/*.md"]
+        PYMD["Python-Markdown"]
+        DOCTEMPLATE["documentation/page.html"]
+        DOCJS["docs.js"]
+        MERMAID["Mermaid.js"]
+        DOCDOM["Documentation DOM"]
 
-    API["/api/system/"]
-
-    CHART["Chart.js"]
-
-    DOM["Browser DOM"]
-
-    TEMPLATE --> DOM
-    CSS --> DOM
-
-    API -->|"JSON"| JS
-
-    JS -->|"textContent"| DOM
-    JS --> CHART
-
-    CHART -->|"draws on canvas"| DOM
+        MD --> PYMD
+        PYMD --> DOCTEMPLATE
+        DOCTEMPLATE --> DOCDOM
+        DOCJS --> MERMAID
+        MERMAID --> DOCDOM
+    end
 ```
 
 ---
