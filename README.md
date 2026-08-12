@@ -151,3 +151,42 @@ sample
     ├── count
     ├── top_cpu
     └── top_memory
+
+
+                            WINDOWS
+                               │
+                               ▼
+                             psutil
+                               │
+              ┌────────────────┼───────────────┐
+              ▼                ▼               ▼
+             CPU             Disk           Processes
+              │                │               │
+              └────────────────┼───────────────┘
+                               ▼
+                         SystemSampler
+                               │
+                               ▼
+                       MonitoringService
+                         │           │
+                         ▼           ▼
+                    latest data    history
+                         │           │
+                         └─────┬─────┘
+                               ▼
+                         Django view
+                               │
+                               ▼
+                         /api/system/
+                               │
+                              JSON
+                               │
+                               ▼
+                         JavaScript
+                               │
+                 ┌─────────────┴────────────┐
+                 ▼                          ▼
+            metric cards                Chart.js
+                                            │
+                                            ▼
+                                      CPU history

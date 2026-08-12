@@ -1,0 +1,185 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>System Monitor</title>
+
+    <link
+        rel="stylesheet"
+        href="{% static 'dashboard/css/dashboard.css' %}"
+    >
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"
+    ></script>
+</head>
+
+<body>
+
+    <main class="dashboard">
+
+        <header class="dashboard-header">
+
+            <div>
+                <h1>System Monitor</h1>
+
+                <p>
+                    Real-time Windows performance monitoring
+                </p>
+            </div>
+
+            <div class="live-indicator">
+                <span class="live-dot"></span>
+                LIVE
+            </div>
+
+        </header>
+
+
+        <section class="metric-grid">
+
+            <article class="metric-card">
+
+                <span class="metric-label">
+                    CPU
+                </span>
+
+                <strong
+                    class="metric-value"
+                    id="cpu-value"
+                >
+                    --%
+                </strong>
+
+                <span class="metric-detail">
+                    Total utilisation
+                </span>
+
+            </article>
+
+
+            <article class="metric-card">
+
+                <span class="metric-label">
+                    Memory
+                </span>
+
+                <strong
+                    class="metric-value"
+                    id="memory-value"
+                >
+                    --%
+                </strong>
+
+                <span
+                    class="metric-detail"
+                    id="memory-detail"
+                >
+                    --
+                </span>
+
+            </article>
+
+
+            <article class="metric-card">
+
+                <span class="metric-label">
+                    Disk
+                </span>
+
+                <strong
+                    class="metric-value"
+                    id="disk-value"
+                >
+                    --%
+                </strong>
+
+                <span
+                    class="metric-detail"
+                    id="disk-detail"
+                >
+                    --
+                </span>
+
+            </article>
+
+
+            <article class="metric-card">
+
+                <span class="metric-label">
+                    Network
+                </span>
+
+                <strong
+                    class="metric-value network-value"
+                    id="network-value"
+                >
+                    ↓ -- MB/s
+                </strong>
+
+                <span
+                    class="metric-detail"
+                    id="network-detail"
+                >
+                    ↑ -- MB/s
+                </span>
+
+            </article>
+
+        </section>
+
+
+        <section class="chart-card">
+
+            <div class="card-header">
+
+                <div>
+                    <h2>CPU utilisation</h2>
+
+                    <p>
+                        Last 60 samples
+                    </p>
+                </div>
+
+                <span id="sample-count">
+                    0 / 60
+                </span>
+
+            </div>
+
+            <div class="chart-container">
+
+                <canvas id="cpu-chart"></canvas>
+
+            </div>
+
+        </section>
+
+
+        <footer class="dashboard-footer">
+
+            <span id="last-updated">
+                Waiting for first sample...
+            </span>
+
+        </footer>
+
+    </main>
+
+
+    <script
+        src="{% static 'dashboard/js/dashboard.js' %}"
+    ></script>
+
+</body>
+
+</html>
