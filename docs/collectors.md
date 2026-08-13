@@ -433,7 +433,7 @@ Example:
 
 One utilisation percentage for each logical processor.
 
-This will later be used for the CPU-per-core dashboard.
+This is now used by the dashboard to render one live utilisation bar for each logical processor.
 
 ---
 
@@ -1231,7 +1231,7 @@ src/process_tree.py
 
 which is used to experiment with this concept.
 
-A future dashboard page will provide an expandable process tree.
+The dedicated Processes page now uses `pid` and `ppid` to build an expandable parent/child process tree in JavaScript.
 
 ---
 
@@ -1492,7 +1492,7 @@ MsMpEng.exe       0.8%
 python.exe        0.4%
 ```
 
-This will be shown in a future dashboard table.
+This is now displayed in the dashboard's Top CPU Processes table.
 
 ---
 
@@ -1516,7 +1516,7 @@ Steam             290 MB
 python.exe         110 MB
 ```
 
-This will also become part of the dashboard.
+This is now displayed in the dashboard's Top Memory Processes table.
 
 ---
 

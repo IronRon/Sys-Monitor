@@ -24,6 +24,18 @@ const sampleCount =
 const lastUpdated =
     document.getElementById("last-updated");
 
+const cpuCoreGrid =
+    document.getElementById("cpu-core-grid");
+
+const cpuCoreSummary =
+    document.getElementById("cpu-core-summary");
+
+const topCpuProcesses =
+    document.getElementById("top-cpu-processes");
+
+const topMemoryProcesses =
+    document.getElementById("top-memory-processes");
+
 
 function bytesToGB(bytes) {
     return bytes / (1024 ** 3);
@@ -178,6 +190,116 @@ function updateCpuChart(history) {
     cpuChart.update();
 }
 
+function updateCpuCores(cpu) {
+
+    cpuCoreGrid.innerHTML = "";
+
+    cpuCoreSummary.textContent =
+        `${cpu.physical_cores} physical / `
+        +
+        `${cpu.logical_processors} logical`;
+
+
+    cpu.per_cpu_percent.forEach(
+        (percent, index) => {
+
+            const core =
+                document.createElement("div");
+
+            core.classList.add("cpu-core");
+
+
+            core.innerHTML = `
+                <div class="cpu-core-header">
+
+                    <span>
+                        CPU ${index}
+                    </span>
+
+                    <strong>
+                        ${percent.toFixed(1)}%
+                    </strong>
+
+                </div>
+
+                <div class="cpu-core-track">
+
+                    <div
+                        class="cpu-core-fill"
+                        style="width: ${percent}%"
+                    ></div>
+
+                </div>
+            `;
+
+
+            cpuCoreGrid.appendChild(core);
+        }
+    );
+}
+
+function updateTopCpuProcesses(processes) {
+
+    topCpuProcesses.innerHTML = "";
+
+
+    processes.forEach((process) => {
+
+        const row =
+            document.createElement("tr");
+
+
+        row.innerHTML = `
+            <td class="process-name">
+                ${process.name}
+            </td>
+
+            <td class="process-pid">
+                ${process.pid}
+            </td>
+
+            <td class="process-value">
+                ${process.cpu_percent.toFixed(2)}%
+            </td>
+        `;
+
+
+        topCpuProcesses.appendChild(row);
+    });
+}
+
+function updateTopMemoryProcesses(processes) {
+
+    topMemoryProcesses.innerHTML = "";
+
+
+    processes.forEach((process) => {
+
+        const row =
+            document.createElement("tr");
+
+
+        row.innerHTML = `
+            <td class="process-name">
+                ${process.name}
+            </td>
+
+            <td class="process-pid">
+                ${process.pid}
+            </td>
+
+            <td class="process-value">
+                ${bytesToMB(
+                    process.memory_bytes
+                ).toFixed(1)} MB
+            </td>
+        `;
+
+
+        topMemoryProcesses.appendChild(row);
+    });
+}
+
 
 async function fetchSystemData() {
 
@@ -199,6 +321,18 @@ async function fetchSystemData() {
         updateCards(data);
 
         updateCpuChart(data.history);
+
+        updateCpuCores(
+            data.cpu
+        );
+
+        updateTopCpuProcesses(
+            data.processes.top_cpu
+        );
+
+        updateTopMemoryProcesses(
+            data.processes.top_memory
+        );
 
 
         sampleCount.textContent =

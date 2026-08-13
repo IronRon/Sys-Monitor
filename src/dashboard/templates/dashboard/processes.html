@@ -1,0 +1,229 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Processes | System Monitor</title>
+
+    <link
+        rel="stylesheet"
+        href="{% static 'dashboard/css/dashboard.css' %}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{% static 'dashboard/css/processes.css' %}"
+    >
+
+</head>
+
+
+<body>
+
+<main class="dashboard processes-dashboard">
+
+
+    <header class="dashboard-header">
+
+        <div>
+
+            <h1>
+                Processes
+            </h1>
+
+            <p>
+                Live Windows process monitoring
+            </p>
+
+        </div>
+
+
+        <nav class="main-nav">
+
+            <a href="/">
+                Overview
+            </a>
+
+            <a
+                href="/processes/"
+                class="active"
+            >
+                Processes
+            </a>
+
+            <a href="/docs/">
+                Docs
+            </a>
+
+        </nav>
+
+    </header>
+
+
+    <section class="process-toolbar">
+
+        <div class="process-summary">
+
+            <span class="summary-label">
+                Running Processes
+            </span>
+
+            <strong id="process-count">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="process-controls">
+
+            <input
+                type="search"
+                id="process-search"
+                placeholder="Search process or PID..."
+                autocomplete="off"
+            >
+
+
+            <div class="view-switcher">
+
+                <button
+                    type="button"
+                    id="table-view-button"
+                    class="active"
+                >
+                    Table
+                </button>
+
+                <button
+                    type="button"
+                    id="tree-view-button"
+                >
+                    Tree
+                </button>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section
+        id="table-view"
+        class="process-view"
+    >
+
+        <div class="dashboard-card process-list-card">
+
+            <div class="table-wrapper">
+
+                <table class="process-list-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th data-sort="name">
+                                Process
+                            </th>
+
+                            <th data-sort="pid">
+                                PID
+                            </th>
+
+                            <th data-sort="ppid">
+                                PPID
+                            </th>
+
+                            <th
+                                data-sort="cpu_percent"
+                                class="numeric-column"
+                            >
+                                CPU
+                            </th>
+
+                            <th
+                                data-sort="memory_bytes"
+                                class="numeric-column"
+                            >
+                                Memory
+                            </th>
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="process-table-body">
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section
+        id="tree-view"
+        class="process-view hidden"
+    >
+
+        <div class="dashboard-card process-tree-card">
+
+            <div class="card-header">
+
+                <div>
+
+                    <h2>
+                        Process Tree
+                    </h2>
+
+                    <p>
+                        Parent and child process relationships
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div id="process-tree">
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <footer class="dashboard-footer">
+
+        <span id="process-last-updated">
+            Waiting for first sample...
+        </span>
+
+    </footer>
+
+
+</main>
+
+
+<script
+    src="{% static 'dashboard/js/processes.js' %}"
+></script>
+
+</body>
+
+</html>

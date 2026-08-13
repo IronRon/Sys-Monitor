@@ -4,6 +4,13 @@ import time
 from monitoring.history import MonitorHistory
 from monitoring.sampler import SystemSampler
 
+from datetime import datetime
+
+from collectors.processes import (
+    prime_process_cpu,
+    get_processes,
+)
+
 
 class MonitoringService:
     def __init__(self):
@@ -72,5 +79,35 @@ class MonitoringService:
             ],
         }
 
+class ProcessService:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.is_primed = False
+
+    def _prime(self):
+        prime_process_cpu()
+
+        self.is_primed = True
+
+    def get_process_data(self):
+        with self.lock:
+
+            if not self.is_primed:
+                self._prime()
+
+                # Give the first process CPU measurements
+                # a useful interval to accumulate.
+                time.sleep(1)
+
+            processes = get_processes()
+
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "count": len(processes),
+                "processes": processes,
+            }
+
+
+process_service = ProcessService()
 
 monitoring_service = MonitoringService()

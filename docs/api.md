@@ -32,12 +32,14 @@ Current routes:
 
 | Method | Endpoint       | Purpose                                                 |
 | ------ | -------------- | ------------------------------------------------------- |
-| `GET`  | `/`            | Render the web dashboard                                |
-| `GET`  | `/api/system/` | Retrieve current monitoring data and recent CPU history |
+| `GET` | `/` | Render the overview dashboard |
+| `GET` | `/processes/` | Render the dedicated Processes page |
+| `GET` | `/api/system/` | Retrieve current system data and recent CPU history |
+| `GET` | `/api/processes/` | Retrieve the complete current process list |
 
-Only `/api/system/` is currently an **API endpoint** because it returns machine-readable JSON.
+`/api/system/` and `/api/processes/` are the current **API endpoints** because they return machine-readable JSON.
 
-The project also has normal Django HTML routes such as `/` and `/docs/.../`. These are web-page routes rather than API endpoints.
+The project also has normal Django HTML routes such as `/`, `/processes/` and `/docs/.../`. These return web pages rather than API data.
 
 ---
 
@@ -237,12 +239,9 @@ The current URL configuration is conceptually:
 ```python
 urlpatterns = [
     path("", views.index, name="index"),
-
-    path(
-        "api/system/",
-        views.system_api,
-        name="system-api",
-    ),
+    path("processes/", views.processes_page, name="processes"),
+    path("api/system/", views.system_api, name="system-api"),
+    path("api/processes/", views.processes_api, name="processes-api"),
 ]
 ```
 
@@ -300,6 +299,7 @@ The endpoint currently provides data for:
 
 * CPU
 * per-logical-processor CPU usage
+* physical and logical CPU counts
 * memory
 * disk capacity
 * disk read/write throughput
@@ -479,7 +479,10 @@ Values below are illustrative.
             9.8,
             18.2,
             4.7
-        ]
+        ],
+
+        "physical_cores": 10,
+        "logical_processors": 20
     },
 
     "memory": {
@@ -593,7 +596,9 @@ sample["timestamp"].isoformat()
 ```json
 "cpu": {
     "percent": 14.8,
-    "per_cpu_percent": [...]
+    "per_cpu_percent": [...],
+    "physical_cores": 10,
+    "logical_processors": 20
 }
 ```
 
@@ -666,6 +671,30 @@ index 2 → logical CPU 2
 ```
 
 The development PC currently exposes 20 logical processors, so its normal response contains 20 values.
+
+---
+
+## `cpu.physical_cores`
+
+Type:
+
+```text
+integer
+```
+
+Number of physical CPU cores reported by the collector.
+
+---
+
+## `cpu.logical_processors`
+
+Type:
+
+```text
+integer
+```
+
+Number of logical processors visible to Windows. The frontend uses this together with `per_cpu_percent` to build the live logical-processor grid.
 
 ---
 
@@ -1815,7 +1844,7 @@ These are not all implemented yet.
 
 # Current API Characteristics
 
-The current API is:
+The current APIs are:
 
 * local
 * read-only
@@ -1885,28 +1914,16 @@ Versioning is unnecessary for the current early development stage.
 
 The API currently has several intentional limitations.
 
-## Only One Main Monitoring Endpoint
+## Small Number of Coarse-Grained Endpoints
 
-Most data is grouped into:
+The application currently exposes two monitoring endpoints:
 
 ```text
 /api/system/
+/api/processes/
 ```
 
-This is simple but may become too large as the project grows.
-
----
-
-## No Complete Process List
-
-The endpoint currently returns:
-
-```text
-top_cpu
-top_memory
-```
-
-rather than every process.
+This is still deliberately simple. More specialised CPU, memory, disk, network and history endpoints may be added only when the UI needs them.
 
 ---
 
@@ -1953,22 +1970,15 @@ History disappears when the application restarts.
 
 ---
 
-## No Filtering
+## No Server-Side Filtering
 
-Process data cannot yet be filtered by:
-
-```text
-name
-PID
-CPU threshold
-memory threshold
-```
+The Processes page supports client-side search and sorting, but `/api/processes/` currently returns the complete accessible process list on each request. It does not yet accept server-side filter or sort query parameters.
 
 ---
 
 ## No Pagination
 
-A future endpoint returning hundreds of processes will probably require filtering, sorting or pagination.
+`/api/processes/` currently returns the full process list in one response. If the process payload becomes significantly larger, server-side filtering or pagination may become useful.
 
 ---
 
@@ -2001,13 +2011,13 @@ Potential future API structure:
 ```text
 /api/
 │
-├── system/
-├── cpu/
-├── memory/
-├── disk/
-├── network/
-├── processes/
-└── history/
+├── system/        # current
+├── processes/     # current
+├── cpu/            # possible future
+├── memory/         # possible future
+├── disk/           # possible future
+├── network/        # possible future
+└── history/        # possible future
 ```
 
 ---
@@ -2099,21 +2109,22 @@ Could return information per network adapter:
 
 ---
 
-# Planned `/api/processes/`
+# `GET /api/processes/`
 
-A dedicated process endpoint is likely to be one of the next major additions.
+The dedicated Processes page uses a separate endpoint for the complete live process list.
 
-Possible response:
+Example response:
 
 ```json
 {
+    "timestamp": "2026-08-13T03:00:00.000000",
     "count": 289,
-
     "processes": [
         {
             "pid": 18320,
             "ppid": 15488,
             "name": "chrome.exe",
+            "cpu_percent_raw": 72.4,
             "cpu_percent": 3.62,
             "memory_bytes": 724824064
         }
@@ -2121,7 +2132,7 @@ Possible response:
 }
 ```
 
-This endpoint would support the planned Processes page.
+The response intentionally remains **flat**. Each process carries its `pid` and `ppid`, and `processes.js` builds the parent/child tree in the browser. The same response can therefore support the sortable table, search/filtering and tree view.
 
 ---
 
@@ -2195,9 +2206,9 @@ Future fields could include:
 
 ---
 
-# Possible Process Tree Endpoint
+# Possible Server-Side Process Tree Endpoint
 
-For the planned expandable process tree, an endpoint might provide hierarchical data:
+The current Processes page builds its tree client-side from the flat `/api/processes/` response. A future endpoint could instead provide already-hierarchical data:
 
 ```json
 {
@@ -2263,7 +2274,7 @@ Advantages:
 * tree is ready to render
 * parent/child structure already resolved
 
-For the planned Processes page, a flat response may be more flexible because the same data can power both:
+The current implementation uses the flat response because the same data powers both:
 
 ```text
 table

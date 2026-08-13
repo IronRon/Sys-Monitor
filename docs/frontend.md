@@ -69,15 +69,18 @@ src/dashboard/
 │
 ├── templates/
 │   └── dashboard/
-│       └── index.html
+│       ├── index.html
+│       └── processes.html
 │
 └── static/
     └── dashboard/
         ├── css/
-        │   └── dashboard.css
+        │   ├── dashboard.css
+        │   └── processes.css
         │
         └── js/
-            └── dashboard.js
+            ├── dashboard.js
+            └── processes.js
 ```
 
 ---
@@ -347,6 +350,13 @@ Dashboard
 │
 ├── CPU History Chart
 │
+├── Logical Processor Activity
+│   └── one live utilisation bar per logical CPU
+│
+├── Process Tables
+│   ├── Top CPU Processes
+│   └── Top Memory Processes
+│
 └── Last Updated information
 ```
 
@@ -446,6 +456,31 @@ browser redraws element
 
 ---
 
+
+# Dynamic DOM Generation
+
+The logical-processor grid and process tables are generated from API data rather than being hard-coded in HTML.
+
+For example, `cpu.per_cpu_percent` is an array containing one percentage for each logical processor. JavaScript loops through the array and creates a DOM element for every entry:
+
+```text
+API array
+   ↓
+forEach()
+   ↓
+createElement()
+   ↓
+appendChild()
+   ↓
+CPU 0, CPU 1, CPU 2, ...
+```
+
+This makes the UI **data-driven**: a PC with 8 logical processors creates 8 items, while a PC with 20 creates 20.
+
+The Top CPU and Top Memory tables use the same pattern. Each process object returned by the API becomes one table row.
+
+---
+
 # `dashboard.js`
 
 The main frontend behaviour lives in:
@@ -461,7 +496,9 @@ Its main responsibilities are:
 3. Update dashboard cards.
 4. Format raw values.
 5. Update the CPU chart.
-6. Repeat the process.
+6. Build the logical-processor utilisation grid.
+7. Build the Top CPU and Top Memory process tables.
+8. Repeat the process.
 
 ---
 
@@ -1373,19 +1410,42 @@ Those belong to the Python backend.
 
 ---
 
+
+# Dedicated Processes Page
+
+The frontend now includes `/processes/`, backed by `/api/processes/`. The page polls the full process list and supports:
+
+- search by process name, PID or PPID
+- sorting by name, PID, PPID, CPU or memory
+- a flat table view
+- an expandable parent/child tree view
+
+`processes.js` stores the latest process array and current sort/view state in JavaScript. A `Map` provides fast `PID → process` lookup when constructing the process tree, while a `Set` remembers which tree nodes are expanded between live refreshes. HTML `<details>` and `<summary>` elements provide the expand/collapse behaviour.
+
+```mermaid
+flowchart LR
+    API["/api/processes/"]
+    JS["processes.js"]
+    DATA["Flat PID / PPID process list"]
+    TABLE["Searchable / sortable table"]
+    TREE["Expandable process tree"]
+
+    API --> JS
+    JS --> DATA
+    DATA --> TABLE
+    DATA --> TREE
+```
+
+---
+
 # Current Limitations
 
 The frontend is intentionally still simple.
 
 Current limitations include:
 
-* one main dashboard page
 * only CPU history is graphed
-* no CPU-per-core visualisation
-* no process tables yet
-* no Processes page
-* no expandable process tree
-* no navigation system
+* process details are currently limited to name, PID, PPID, CPU and memory
 * no user-selectable refresh rate
 * no persistent chart history
 * Chart.js currently loads from an external CDN
@@ -1396,36 +1456,13 @@ Current limitations include:
 
 # Planned Frontend Development
 
-The next dashboard iteration will add:
-
-```text
-CPU
-├── per-logical-processor visualisation
-└── live utilisation
-
-Processes
-├── Top CPU table
-└── Top RAM table
-```
-
-After that, the project will add a dedicated Processes page containing:
-
-```text
-Processes
-│
-├── PID
-├── PPID
-├── name
-├── CPU
-├── memory
-└── expandable parent/child process tree
-```
+Near-term frontend work can now focus on richer graphs, more detailed process information and general navigation/layout polish rather than creating the Processes page itself.
 
 ---
 
 # Current Frontend Architecture
 
-The project now has two browser-facing areas: the live monitoring dashboard and the documentation site.
+The project now has three browser-facing areas: the overview dashboard, the dedicated Processes page and the documentation site.
 
 ```mermaid
 flowchart TD
@@ -1435,14 +1472,37 @@ flowchart TD
         JS["dashboard.js"]
         API["/api/system/"]
         CHART["Chart.js"]
+        CORES["Logical CPU Grid"]
+        TABLES["Top Process Tables"]
         DOM["Dashboard DOM"]
 
         TEMPLATE --> DOM
         CSS --> DOM
         API -->|"JSON"| JS
-        JS -->|"textContent"| DOM
+        JS -->|"textContent / dynamic DOM"| DOM
         JS --> CHART
+        JS --> CORES
+        JS --> TABLES
         CHART -->|"draws on canvas"| DOM
+        CORES --> DOM
+        TABLES --> DOM
+    end
+
+    subgraph Processes["Processes Page"]
+        PTEMPLATE["processes.html"]
+        PCSS["processes.css"]
+        PJS["processes.js"]
+        PAPI["/api/processes/"]
+        PTABLE["Process Table"]
+        PTREE["Process Tree"]
+
+        PAPI -->|"JSON"| PJS
+        PTEMPLATE --> PTABLE
+        PTEMPLATE --> PTREE
+        PCSS --> PTABLE
+        PCSS --> PTREE
+        PJS --> PTABLE
+        PJS --> PTREE
     end
 
     subgraph Docs["Documentation Site"]
@@ -1487,18 +1547,16 @@ redraw dashboard
 
 Chart.js is responsible only for visualisation.
 
-The current frontend architecture therefore follows:
+The live monitoring frontend now has two parallel flows:
 
 ```text
-Django API
-    ↓
-JSON
-    ↓
-dashboard.js
-    ↓
-DOM + Chart.js
-    ↓
-live dashboard
+/api/system/                 /api/processes/
+     ↓                            ↓
+dashboard.js                  processes.js
+     ↓                            ↓
+overview dashboard       process table + tree
 ```
+
+Both pages remain data-driven: Django serves JSON and JavaScript decides how that data is presented in the browser.
 
 This keeps browser behaviour separate from the operating-system monitoring code.

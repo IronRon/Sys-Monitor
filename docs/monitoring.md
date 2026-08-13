@@ -861,7 +861,9 @@ A simplified sample looks like:
 
     "cpu": {
         "percent": ...,
-        "per_cpu_percent": ...
+        "per_cpu_percent": ...,
+        "physical_cores": ...,
+        "logical_processors": ...
     },
 
     "memory": {
@@ -894,6 +896,8 @@ A simplified sample looks like:
 ```
 
 This sample becomes the main data structure shared between the monitoring engine and the application's interfaces.
+
+The CPU portion now carries both per-logical-processor utilisation and the physical/logical processor counts. The dashboard uses these values directly to build the logical-processor visualisation.
 
 ---
 
@@ -995,9 +999,32 @@ get_top_memory_processes(
 )
 ```
 
-The sample therefore contains only the top process rankings required by the current dashboard and terminal interface.
+The sample therefore contains only the top process rankings required by the overview dashboard and terminal interface.
 
-The complete process list may later be exposed through a dedicated Processes page.
+The dedicated Processes page uses a separate `ProcessService`, which calls the same process collector but returns the complete process list through `/api/processes/`. This keeps the main `/api/system/` response smaller while reusing the same collection logic.
+
+---
+
+
+# ProcessService
+
+The dedicated Processes page uses a separate Django-side `ProcessService`.
+
+```text
+/processes/
+    ↓
+processes.js
+    ↓
+/api/processes/
+    ↓
+ProcessService
+    ↓
+processes.py
+```
+
+`ProcessService` primes process CPU measurements, retrieves the complete process list and returns a timestamp, process count and process objects. The frontend then decides whether to display those objects as a flat table or as a parent/child tree.
+
+Like the main `MonitoringService`, this service currently uses request-driven sampling. If both monitoring pages are active at once, their process CPU sampling intervals can affect one another. A later background monitoring loop would remove that limitation by collecting once and sharing the latest sample with both APIs.
 
 ---
 
@@ -1699,31 +1726,21 @@ The web interface therefore benefits from exactly the same monitoring calculatio
 
 # Current Django Sampling Behaviour
 
-At the current stage, a new sample is created when the browser requests:
+At the current stage, monitoring is still driven by browser requests. The overview page requests `/api/system/`, while the Processes page requests `/api/processes/`.
 
 ```text
-/api/system/
+Overview page                 Processes page
+     ↓                             ↓
+GET /api/system/             GET /api/processes/
+     ↓                             ↓
+MonitoringService              ProcessService
+     ↓                             ↓
+SystemSampler                process collector
+     ↓                             ↓
+JSON response                 JSON response
 ```
 
-The simplified flow is:
-
-```text
-Browser
-    ↓
-GET /api/system/
-    ↓
-Django
-    ↓
-MonitoringService
-    ↓
-SystemSampler.sample()
-    ↓
-history.add()
-    ↓
-JSON response
-```
-
-This means sampling is currently **request-driven**.
+This means sampling is currently **request-driven** rather than being produced by one independent background monitor.
 
 ---
 
@@ -1732,17 +1749,17 @@ This means sampling is currently **request-driven**.
 Current behaviour:
 
 ```text
-Dashboard open
+Monitoring page open
     ↓
 requests every ~1 second
     ↓
-samples continue
+that page's sampling continues
 
-Dashboard closed
+Monitoring page closed
     ↓
-requests stop
+its requests stop
     ↓
-sampling stops
+that sampling path stops
 ```
 
 This is intentionally simple for the current version.

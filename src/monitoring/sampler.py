@@ -84,6 +84,8 @@ class SystemSampler:
             "cpu": {
                 "percent": cpu["total_percent"],
                 "per_cpu_percent": cpu["per_cpu_percent"],
+                "physical_cores": cpu["physical_cores"],
+                "logical_processors": cpu["logical_processors"],
             },
 
             "memory": {

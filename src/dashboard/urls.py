@@ -7,8 +7,20 @@ urlpatterns = [
     path("", views.index, name="index"),
 
     path(
+        "processes/",
+        views.processes_page,
+        name="processes",
+    ),
+
+    path(
         "api/system/",
         views.system_api,
         name="system-api",
+    ),
+
+    path(
+        "api/processes/",
+        views.processes_api,
+        name="processes-api",
     ),
 ]

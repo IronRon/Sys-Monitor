@@ -1,0 +1,384 @@
+.processes-dashboard {
+    max-width: 1500px;
+}
+
+
+/* Navigation */
+
+.main-nav {
+    display: flex;
+    align-items: center;
+
+    gap: 6px;
+}
+
+
+.main-nav a {
+    padding: 8px 12px;
+
+    border-radius: 8px;
+
+    color: #7f8ca3;
+
+    font-size: 0.82rem;
+}
+
+
+.main-nav a:hover {
+    color: #ffffff;
+
+    background:
+        rgba(255, 255, 255, 0.05);
+}
+
+
+.main-nav a.active {
+    color: #9bb8ff;
+
+    background:
+        rgba(115, 148, 238, 0.12);
+}
+
+
+
+/* Toolbar */
+
+.process-toolbar {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 20px;
+
+    margin-bottom: 18px;
+}
+
+
+.process-summary {
+    display: flex;
+    flex-direction: column;
+}
+
+
+.summary-label {
+    color: #738099;
+
+    font-size: 0.72rem;
+    font-weight: 700;
+
+    letter-spacing: 0.08em;
+
+    text-transform: uppercase;
+}
+
+
+.process-summary strong {
+    margin-top: 3px;
+
+    color: #ffffff;
+
+    font-size: 1.8rem;
+}
+
+
+.process-controls {
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+}
+
+
+#process-search {
+    width: 280px;
+
+    padding: 10px 13px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.1);
+
+    border-radius: 9px;
+
+    outline: none;
+
+    background: #101725;
+
+    color: #ffffff;
+}
+
+
+#process-search::placeholder {
+    color: #5e6b81;
+}
+
+
+#process-search:focus {
+    border-color:
+        rgba(115, 148, 238, 0.65);
+}
+
+
+
+/* View switch */
+
+.view-switcher {
+    display: flex;
+
+    padding: 3px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.08);
+
+    border-radius: 9px;
+
+    background: #0d1320;
+}
+
+
+.view-switcher button {
+    border: 0;
+
+    padding: 7px 12px;
+
+    border-radius: 6px;
+
+    background: transparent;
+
+    color: #748198;
+
+    cursor: pointer;
+}
+
+
+.view-switcher button.active {
+    background:
+        rgba(115, 148, 238, 0.14);
+
+    color: #a9c0ff;
+}
+
+
+
+/* Cards */
+
+.process-list-card,
+.process-tree-card {
+    padding: 20px;
+}
+
+
+.process-list-table {
+    width: 100%;
+
+    border-collapse: collapse;
+}
+
+
+.process-list-table th,
+.process-list-table td {
+    padding: 12px 14px;
+
+    border-bottom:
+        1px solid rgba(255, 255, 255, 0.055);
+
+    text-align: left;
+}
+
+
+.process-list-table th {
+    position: sticky;
+    top: 0;
+
+    background: #111827;
+
+    color: #68768e;
+
+    font-size: 0.7rem;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.08em;
+
+    cursor: pointer;
+
+    user-select: none;
+}
+
+
+.process-list-table th:hover {
+    color: #b3c4ef;
+}
+
+
+.process-list-table td {
+    color: #aab4c5;
+
+    font-size: 0.84rem;
+}
+
+
+.process-list-table tbody tr:hover {
+    background:
+        rgba(255, 255, 255, 0.025);
+}
+
+
+.numeric-column {
+    text-align: right !important;
+}
+
+
+.process-table-name {
+    color: #edf1fa !important;
+
+    font-weight: 500;
+}
+
+
+.process-table-pid {
+    color: #76849a !important;
+
+    font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+}
+
+
+.process-table-number {
+    text-align: right !important;
+
+    font-variant-numeric: tabular-nums;
+}
+
+
+
+/* Tree */
+
+.process-tree-card {
+    min-height: 300px;
+}
+
+
+.tree-node {
+    margin-left: 18px;
+}
+
+
+.tree-node-root {
+    margin-left: 0;
+}
+
+
+.tree-node summary {
+    display: flex;
+    align-items: center;
+
+    gap: 14px;
+
+    padding: 7px 8px;
+
+    border-radius: 7px;
+
+    cursor: pointer;
+
+    list-style: none;
+}
+
+
+.tree-node summary:hover {
+    background:
+        rgba(255, 255, 255, 0.035);
+}
+
+
+.tree-node summary::-webkit-details-marker {
+    display: none;
+}
+
+
+.tree-toggle {
+    width: 14px;
+
+    color: #66758e;
+
+    font-size: 0.7rem;
+}
+
+
+.tree-process-name {
+    min-width: 180px;
+
+    color: #edf1fa;
+
+    font-size: 0.84rem;
+
+    font-weight: 500;
+}
+
+
+.tree-process-info {
+    color: #6f7d94;
+
+    font-size: 0.76rem;
+}
+
+
+.tree-process-resource {
+    margin-left: auto;
+
+    color: #8897ad;
+
+    font-size: 0.76rem;
+
+    font-variant-numeric: tabular-nums;
+}
+
+
+.tree-children {
+    margin-left: 7px;
+
+    padding-left: 10px;
+
+    border-left:
+        1px solid rgba(255, 255, 255, 0.06);
+}
+
+
+
+/* Helpers */
+
+.hidden {
+    display: none;
+}
+
+
+
+@media (max-width: 800px) {
+
+    .process-toolbar {
+        align-items: stretch;
+
+        flex-direction: column;
+    }
+
+
+    .process-controls {
+        flex-direction: column;
+
+        align-items: stretch;
+    }
+
+
+    #process-search {
+        width: 100%;
+    }
+
+
+    .main-nav {
+        flex-wrap: wrap;
+    }
+
+}

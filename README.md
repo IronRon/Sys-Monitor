@@ -46,7 +46,9 @@ python -m src.monitor
 - Memory usage
 - Top CPU-consuming processes
 - Top memory-consuming processes
-- Process parent/child relationships
+- Full live process list
+- Process search and sortable columns
+- Table and expandable parent/child tree views
 - Chrome process-tree inspection
 
 ### Monitoring History
@@ -57,10 +59,12 @@ With a sampling interval of approximately one second, this represents roughly th
 
 ### Interfaces
 
-The project currently provides two interfaces:
+The project currently provides:
 
 1. A terminal-based monitor
-2. A Django web dashboard
+2. A Django overview dashboard
+3. A dedicated Django Processes page
+4. A Django documentation area
 
 The web dashboard currently displays:
 
@@ -69,6 +73,21 @@ The web dashboard currently displays:
 - Disk usage and I/O
 - Network download/upload speeds
 - A live 60-sample CPU graph
+- Live utilisation for each logical processor
+- Physical/logical CPU counts
+- Top CPU process table
+- Top memory process table
+
+The dedicated Processes page provides:
+
+- the full live process list
+- PID and PPID values
+- CPU and memory usage
+- live search by process name, PID or PPID
+- sortable process columns
+- table and expandable process-tree views
+
+The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 
 ---
 
@@ -111,6 +130,12 @@ Sys_Monitor/
     │
     ├── dashboard/
     │   ├── services.py
+    │   ├── views.py
+    │   ├── urls.py
+    │   ├── templates/
+    │   └── static/
+    │
+    ├── documentation/
     │   ├── views.py
     │   ├── urls.py
     │   ├── templates/
@@ -638,14 +663,9 @@ These limitations are expected to change as the project develops.
 
 Near-term development:
 
-- CPU-per-logical-processor visualisation
-- Top CPU process table
-- Top memory process table
-- Dedicated Processes page
-- PID and PPID display
-- Expandable parent/child process tree
 - More performance graphs
-- Documentation pages inside the Django application
+- richer process details and diagnostics
+- navigation/layout cleanup as more pages are added
 
 Possible later additions:
 
@@ -658,7 +678,6 @@ Possible later additions:
 - network-per-interface monitoring
 - process network activity
 - process disk activity
-- process search and filtering
 - system alerts
 - anomaly detection
 - performance-event investigation

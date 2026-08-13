@@ -149,7 +149,7 @@ explorer.exe
     └── python.exe
 ```
 
-This will later become an interactive feature in the Processes dashboard.
+The Processes page now turns these PID/PPID relationships into an interactive expandable tree.
 
 ---
 
@@ -858,6 +858,79 @@ This is used to turn API history objects into Chart.js data arrays.
 
 ---
 
+
+## Dynamic DOM Generation
+
+JavaScript can create HTML elements at runtime instead of requiring every element to be written in the original template.
+
+Sys Monitor now uses this for the logical-processor grid and process-table rows:
+
+```text
+API data
+   ↓
+JavaScript loop
+   ↓
+createElement()
+   ↓
+appendChild()
+   ↓
+new DOM elements
+```
+
+---
+
+## Data-Driven UI
+
+A data-driven UI creates its visible elements from the data it receives.
+
+For example:
+
+```text
+8 logical processors  →  8 CPU items
+20 logical processors → 20 CPU items
+```
+
+The dashboard therefore adapts to the machine instead of hard-coding a fixed number of CPUs.
+
+---
+
+
+## `Map`
+
+A JavaScript `Map` stores key/value pairs and provides fast lookup by key. The Processes page uses a map such as:
+
+```text
+PID → process object
+```
+
+so a process's `ppid` can quickly be used to find its parent while constructing the tree.
+
+---
+
+## `Set`
+
+A JavaScript `Set` stores unique values. The Processes page uses a set of expanded PIDs so open tree branches can remain open when fresh process data is rendered.
+
+---
+
+## Filtering and Sorting
+
+Filtering selects only items that match a condition, while sorting changes their order. The Processes table uses both: search filters the process array, and clicking a column header changes the sort key and direction.
+
+---
+
+## `<details>` and `<summary>`
+
+HTML `<details>` and `<summary>` elements provide built-in expandable/collapsible content. Sys Monitor uses them for process-tree nodes instead of implementing all expand/collapse behaviour from scratch.
+
+---
+
+## Frontend State
+
+Frontend state is information the browser remembers while the page is running. The Processes page keeps state such as the latest process list, current sort column/direction and expanded tree PIDs.
+
+---
+
 # Chart.js
 
 Chart.js is the frontend charting library currently used by Sys Monitor.
@@ -1264,6 +1337,12 @@ The main new ideas introduced by the project so far include:
 * asynchronous JavaScript
 * `fetch()`
 * `.map()`
+* dynamic DOM generation
+* data-driven UI
+* JavaScript `Map` and `Set`
+* filtering and sorting
+* HTML `<details>` / `<summary>`
+* frontend state
 * Chart.js
 * frontend/backend separation
 * Markdown

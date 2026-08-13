@@ -143,14 +143,17 @@ Sys_Monitor/
     │   │
     │   ├── templates/
     │   │   └── dashboard/
-    │   │       └── index.html
+    │   │       ├── index.html
+    │   │       └── processes.html
     │   │
     │   └── static/
     │       └── dashboard/
     │           ├── css/
-    │           │   └── dashboard.css
+    │           │   ├── dashboard.css
+    │           │   └── processes.css
     │           └── js/
-    │               └── dashboard.js
+    │               ├── dashboard.js
+    │               └── processes.js
     │
     ├── config/
     │   ├── settings.py
@@ -190,15 +193,15 @@ flowchart LR
     end
 
     subgraph Web["Django Layer"]
-        SERVICE["services.py"]
+        SERVICE["MonitoringService / ProcessService"]
         VIEWS["views.py"]
         URLS["urls.py"]
     end
 
     subgraph Frontend["Browser"]
-        HTML["index.html"]
-        JS["dashboard.js"]
-        CSS["dashboard.css"]
+        HTML["index.html / processes.html"]
+        JS["dashboard.js / processes.js"]
+        CSS["dashboard.css / processes.css"]
         CHART["Chart.js"]
     end
 
@@ -449,7 +452,9 @@ sample
 │
 ├── cpu
 │   ├── percent
-│   └── per_cpu_percent
+│   ├── per_cpu_percent
+│   ├── physical_cores
+│   └── logical_processors
 │
 ├── memory
 │   ├── percent
@@ -1058,6 +1063,62 @@ sequenceDiagram
 
     JS->>Django: Next GET /api/system/
 ```
+
+---
+
+
+# Current Dashboard Presentation
+
+The browser now uses the same `/api/system/` response for several visual components:
+
+```mermaid
+flowchart LR
+    API["/api/system/"]
+    JS["dashboard.js"]
+
+    CARD["Overview Cards"]
+    GRAPH["CPU History Graph"]
+    CORES["Logical Processor Grid"]
+    CPU["Top CPU Table"]
+    RAM["Top Memory Table"]
+
+    API --> JS
+    JS --> CARD
+    JS --> GRAPH
+    JS --> CORES
+    JS --> CPU
+    JS --> RAM
+```
+
+The logical-processor grid and process tables are generated dynamically from the arrays returned by the API, so the presentation adapts to the data rather than assuming a fixed number of CPU entries or process rows.
+
+---
+
+
+# Dedicated Processes Page
+
+The web interface now has a second monitoring page at `/processes/`. It uses a separate JSON endpoint so the main system endpoint does not need to send the complete process list on every overview refresh.
+
+```mermaid
+flowchart LR
+    PAGE["/processes/"]
+    JS["processes.js"]
+    API["/api/processes/"]
+    SERVICE["ProcessService"]
+    COLLECTOR["Process Collector"]
+
+    PAGE --> JS
+    JS -->|"poll"| API
+    API --> SERVICE
+    SERVICE --> COLLECTOR
+    COLLECTOR --> SERVICE
+    SERVICE --> API
+    API -->|"flat PID/PPID JSON"| JS
+    JS --> TABLE["Sortable / searchable table"]
+    JS --> TREE["Expandable process tree"]
+```
+
+The API returns a flat list of process objects. `processes.js` uses PID/PPID relationships to build the hierarchy in the browser, so the same data can power both the table and tree views.
 
 ---
 
