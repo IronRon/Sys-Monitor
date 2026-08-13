@@ -89,7 +89,7 @@
             <input
                 type="search"
                 id="process-search"
-                placeholder="Search process or PID..."
+                placeholder="Search process, PID or PPID..."
                 autocomplete="off"
             >
 
@@ -109,6 +109,13 @@
                     id="tree-view-button"
                 >
                     Tree
+                </button>
+
+                <button
+                    type="button"
+                    id="graph-view-button"
+                >
+                    Graph
                 </button>
 
             </div>
@@ -192,7 +199,7 @@
                     </h2>
 
                     <p>
-                        Parent and child process relationships
+                        Compact parent and child process relationships
                     </p>
 
                 </div>
@@ -201,6 +208,128 @@
 
 
             <div id="process-tree">
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <section
+        id="graph-view"
+        class="process-view hidden"
+    >
+
+        <div class="dashboard-card process-graph-card">
+
+            <div class="process-graph-header">
+
+                <div>
+                    <h2>Process Graph</h2>
+                    <p>
+                        Drag to pan, use the mouse wheel to zoom and click a process to inspect it.
+                    </p>
+                </div>
+
+                <div class="graph-toolbar">
+
+                    <span id="graph-stats" class="graph-stats">
+                        -- nodes / -- links
+                    </span>
+
+                    <button
+                        type="button"
+                        id="graph-zoom-out"
+                        class="graph-tool-button graph-icon-button"
+                        title="Zoom out"
+                    >
+                        −
+                    </button>
+
+                    <span id="graph-zoom-label" class="graph-zoom-label">
+                        100%
+                    </span>
+
+                    <button
+                        type="button"
+                        id="graph-zoom-in"
+                        class="graph-tool-button graph-icon-button"
+                        title="Zoom in"
+                    >
+                        +
+                    </button>
+
+                    <button
+                        type="button"
+                        id="graph-fit"
+                        class="graph-tool-button"
+                    >
+                        Fit
+                    </button>
+
+                    <button
+                        type="button"
+                        id="graph-relayout"
+                        class="graph-tool-button"
+                    >
+                        Relayout
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="process-graph-shell">
+
+                <div id="process-graph">
+                </div>
+
+                <div class="graph-help">
+                    <span>Drag background to pan</span>
+                    <span>Scroll to zoom</span>
+                    <span>Click a node for details</span>
+                </div>
+
+                <aside
+                    id="graph-node-details"
+                    class="graph-node-details hidden"
+                >
+                    <button
+                        type="button"
+                        id="graph-details-close"
+                        class="graph-details-close"
+                        aria-label="Close process details"
+                    >
+                        ×
+                    </button>
+
+                    <span class="graph-details-label">
+                        SELECTED PROCESS
+                    </span>
+
+                    <strong id="graph-details-name">
+                        --
+                    </strong>
+
+                    <div class="graph-details-grid">
+                        <span>PID</span>
+                        <b id="graph-details-pid">--</b>
+
+                        <span>PPID</span>
+                        <b id="graph-details-ppid">--</b>
+
+                        <span>CPU</span>
+                        <b id="graph-details-cpu">--</b>
+
+                        <span>Memory</span>
+                        <b id="graph-details-memory">--</b>
+
+                        <span>Children</span>
+                        <b id="graph-details-children">--</b>
+                    </div>
+                </aside>
+
             </div>
 
         </div>
@@ -219,6 +348,14 @@
 
 </main>
 
+
+<script
+    src="https://cdn.jsdelivr.net/npm/cytoscape@3.34.1/dist/cytoscape.min.js"
+></script>
+
+<script
+    src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@4.0.0/dist/cytoscape-dagre.js"
+></script>
 
 <script
     src="{% static 'dashboard/js/processes.js' %}"

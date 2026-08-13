@@ -8,377 +8,519 @@
 .main-nav {
     display: flex;
     align-items: center;
-
     gap: 6px;
 }
 
-
 .main-nav a {
     padding: 8px 12px;
-
     border-radius: 8px;
-
     color: #7f8ca3;
-
     font-size: 0.82rem;
 }
 
-
 .main-nav a:hover {
     color: #ffffff;
-
-    background:
-        rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.05);
 }
-
 
 .main-nav a.active {
     color: #9bb8ff;
-
-    background:
-        rgba(115, 148, 238, 0.12);
+    background: rgba(115, 148, 238, 0.12);
 }
-
 
 
 /* Toolbar */
 
 .process-toolbar {
     display: flex;
-
     justify-content: space-between;
     align-items: center;
-
     gap: 20px;
-
     margin-bottom: 18px;
 }
-
 
 .process-summary {
     display: flex;
     flex-direction: column;
 }
 
-
 .summary-label {
     color: #738099;
-
     font-size: 0.72rem;
     font-weight: 700;
-
     letter-spacing: 0.08em;
-
     text-transform: uppercase;
 }
 
-
 .process-summary strong {
     margin-top: 3px;
-
     color: #ffffff;
-
     font-size: 1.8rem;
 }
 
-
 .process-controls {
     display: flex;
-
     align-items: center;
-
     gap: 12px;
 }
 
-
 #process-search {
-    width: 280px;
-
+    width: 300px;
     padding: 10px 13px;
-
-    border:
-        1px solid rgba(255, 255, 255, 0.1);
-
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 9px;
-
     outline: none;
-
     background: #101725;
-
     color: #ffffff;
 }
-
 
 #process-search::placeholder {
     color: #5e6b81;
 }
 
-
 #process-search:focus {
-    border-color:
-        rgba(115, 148, 238, 0.65);
+    border-color: rgba(115, 148, 238, 0.65);
+    box-shadow: 0 0 0 3px rgba(115, 148, 238, 0.08);
 }
-
 
 
 /* View switch */
 
 .view-switcher {
     display: flex;
-
     padding: 3px;
-
-    border:
-        1px solid rgba(255, 255, 255, 0.08);
-
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 9px;
-
     background: #0d1320;
 }
 
-
 .view-switcher button {
     border: 0;
-
     padding: 7px 12px;
-
     border-radius: 6px;
-
     background: transparent;
-
     color: #748198;
-
     cursor: pointer;
 }
 
-
-.view-switcher button.active {
-    background:
-        rgba(115, 148, 238, 0.14);
-
-    color: #a9c0ff;
+.view-switcher button:hover {
+    color: #d7e0f2;
 }
 
+.view-switcher button.active {
+    background: rgba(115, 148, 238, 0.14);
+    color: #a9c0ff;
+}
 
 
 /* Cards */
 
 .process-list-card,
-.process-tree-card {
+.process-tree-card,
+.process-graph-card {
     padding: 20px;
 }
 
-
 .process-list-table {
     width: 100%;
-
     border-collapse: collapse;
 }
-
 
 .process-list-table th,
 .process-list-table td {
     padding: 12px 14px;
-
-    border-bottom:
-        1px solid rgba(255, 255, 255, 0.055);
-
+    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
     text-align: left;
 }
-
 
 .process-list-table th {
     position: sticky;
     top: 0;
-
     background: #111827;
-
     color: #68768e;
-
     font-size: 0.7rem;
-
     text-transform: uppercase;
-
     letter-spacing: 0.08em;
-
     cursor: pointer;
-
     user-select: none;
 }
-
 
 .process-list-table th:hover {
     color: #b3c4ef;
 }
 
-
 .process-list-table td {
     color: #aab4c5;
-
     font-size: 0.84rem;
 }
 
-
 .process-list-table tbody tr:hover {
-    background:
-        rgba(255, 255, 255, 0.025);
+    background: rgba(255, 255, 255, 0.025);
 }
-
 
 .numeric-column {
     text-align: right !important;
 }
 
-
 .process-table-name {
     color: #edf1fa !important;
-
     font-weight: 500;
 }
 
-
 .process-table-pid {
     color: #76849a !important;
-
-    font-family:
-        "Cascadia Code",
-        Consolas,
-        monospace;
+    font-family: "Cascadia Code", Consolas, monospace;
 }
-
 
 .process-table-number {
     text-align: right !important;
-
     font-variant-numeric: tabular-nums;
 }
 
 
-
-/* Tree */
+/* Compact tree */
 
 .process-tree-card {
     min-height: 300px;
 }
 
-
 .tree-node {
     margin-left: 18px;
 }
-
 
 .tree-node-root {
     margin-left: 0;
 }
 
-
 .tree-node summary {
     display: flex;
     align-items: center;
-
     gap: 14px;
-
     padding: 7px 8px;
-
     border-radius: 7px;
-
     cursor: pointer;
-
     list-style: none;
 }
 
-
 .tree-node summary:hover {
-    background:
-        rgba(255, 255, 255, 0.035);
+    background: rgba(255, 255, 255, 0.035);
 }
-
 
 .tree-node summary::-webkit-details-marker {
     display: none;
 }
 
-
 .tree-toggle {
     width: 14px;
-
     color: #66758e;
-
     font-size: 0.7rem;
 }
 
-
 .tree-process-name {
     min-width: 180px;
-
     color: #edf1fa;
-
     font-size: 0.84rem;
-
     font-weight: 500;
 }
 
-
 .tree-process-info {
     color: #6f7d94;
-
     font-size: 0.76rem;
 }
-
 
 .tree-process-resource {
     margin-left: auto;
-
     color: #8897ad;
-
     font-size: 0.76rem;
-
     font-variant-numeric: tabular-nums;
 }
 
-
 .tree-children {
     margin-left: 7px;
-
     padding-left: 10px;
-
-    border-left:
-        1px solid rgba(255, 255, 255, 0.06);
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+
+/* Graph view */
+
+.process-graph-card {
+    overflow: hidden;
+}
+
+.process-graph-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 16px;
+}
+
+.process-graph-header h2 {
+    margin: 0;
+    color: #ffffff;
+    font-size: 1.05rem;
+}
+
+.process-graph-header p {
+    margin: 5px 0 0;
+    color: #78869d;
+    font-size: 0.8rem;
+}
+
+.graph-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.graph-stats,
+.graph-zoom-label {
+    color: #76859d;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.graph-stats {
+    margin-right: 6px;
+}
+
+.graph-zoom-label {
+    min-width: 42px;
+    text-align: center;
+}
+
+.graph-tool-button {
+    min-height: 32px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: #a9b6ca;
+    font: inherit;
+    font-size: 0.76rem;
+    cursor: pointer;
+}
+
+.graph-tool-button:hover {
+    border-color: rgba(115, 148, 238, 0.4);
+    background: rgba(115, 148, 238, 0.1);
+    color: #dbe6ff;
+}
+
+.graph-tool-button.needs-layout {
+    border-color: rgba(250, 190, 80, 0.42);
+    color: #ffd27c;
+}
+
+.graph-tool-button.needs-layout::after {
+    content: " •";
+    color: #ffb33b;
+}
+
+.graph-icon-button {
+    width: 34px;
+    padding-left: 0;
+    padding-right: 0;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.process-graph-shell {
+    position: relative;
+    width: 100%;
+    height: min(76vh, 920px);
+    min-height: 640px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 15px;
+    background:
+        radial-gradient(
+            circle,
+            rgba(110, 133, 179, 0.13) 1px,
+            transparent 1.5px
+        ) 0 0 / 28px 28px,
+        radial-gradient(
+            circle at 50% 20%,
+            rgba(52, 77, 125, 0.18),
+            transparent 48%
+        ),
+        #080d16;
+}
+
+#process-graph {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.graph-help {
+    position: absolute;
+    left: 14px;
+    bottom: 14px;
+    z-index: 5;
+    display: flex;
+    gap: 7px;
+    pointer-events: none;
+}
+
+.graph-help span {
+    padding: 6px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 999px;
+    background: rgba(6, 10, 18, 0.78);
+    color: #6f7f99;
+    font-size: 0.68rem;
+    backdrop-filter: blur(9px);
+}
+
+.graph-node-details {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+    width: min(310px, calc(100% - 32px));
+    padding: 18px;
+    border: 1px solid rgba(126, 159, 255, 0.25);
+    border-radius: 13px;
+    background: rgba(12, 18, 30, 0.92);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(15px);
+}
+
+.graph-details-close {
+    position: absolute;
+    top: 9px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #708098;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.graph-details-close:hover {
+    background: rgba(255, 255, 255, 0.055);
+    color: #ffffff;
+}
+
+.graph-details-label {
+    display: block;
+    margin-bottom: 5px;
+    color: #7394ee;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+}
+
+.graph-node-details > strong {
+    display: block;
+    max-width: calc(100% - 30px);
+    overflow: hidden;
+    color: #f4f7ff;
+    font-size: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.graph-details-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 20px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 0.76rem;
+}
+
+.graph-details-grid span {
+    color: #718099;
+}
+
+.graph-details-grid b {
+    color: #dce5f5;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
 
 
 /* Helpers */
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
+
+@media (max-width: 900px) {
+
+    .process-graph-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .graph-toolbar {
+        justify-content: flex-start;
+    }
+
+    .process-graph-shell {
+        min-height: 560px;
+        height: 70vh;
+    }
+
+}
 
 
 @media (max-width: 800px) {
 
     .process-toolbar {
         align-items: stretch;
-
         flex-direction: column;
     }
-
 
     .process-controls {
         flex-direction: column;
-
         align-items: stretch;
     }
-
 
     #process-search {
         width: 100%;
     }
 
-
     .main-nav {
         flex-wrap: wrap;
+    }
+
+    .view-switcher {
+        align-self: flex-start;
+    }
+
+    .graph-help {
+        display: none;
+    }
+
+}
+
+
+@media (max-width: 520px) {
+
+    .process-list-card,
+    .process-tree-card,
+    .process-graph-card {
+        padding: 14px;
+    }
+
+    .process-graph-shell {
+        min-height: 500px;
+    }
+
+    .graph-stats {
+        width: 100%;
     }
 
 }
