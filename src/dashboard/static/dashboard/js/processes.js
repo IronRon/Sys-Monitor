@@ -1142,7 +1142,7 @@ function ensureProcessGraph() {
             layout: getGraphLayoutOptions(),
             minZoom: 0.08,
             maxZoom: 2.6,
-            wheelSensitivity: 0.18,
+            wheelSensitivity: 0.58,
             boxSelectionEnabled: false,
             autoungrabify: true,
             selectionType: "single",

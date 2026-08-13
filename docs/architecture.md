@@ -1122,6 +1122,24 @@ The API returns a flat list of process objects. `processes.js` uses PID/PPID rel
 
 ---
 
+# Process Graph Architecture
+
+The dedicated Processes page now has three presentations of the same `/api/processes/` data: Table, expandable Tree and interactive Graph. No new backend endpoint was required.
+
+```mermaid
+flowchart TD
+    API["/api/processes/"] --> JS["processes.js"]
+    JS --> TABLE["Table view"]
+    JS --> TREE["Expandable tree"]
+    JS --> CY["Cytoscape.js graph"]
+    CY --> DAGRE["Dagre directed layout"]
+    DAGRE --> CANVAS["Interactive process forest"]
+```
+
+Each process becomes a Cytoscape node. If its PPID is present in the current process set, JavaScript creates a directed edge from the parent PID to the child PID. Processes whose parents are absent become graph roots, so the result is usually a **forest** containing several independent trees.
+
+The initial layout is calculated by Dagre. Live refreshes then update existing graph elements without automatically rerunning the layout, which preserves the user's pan and zoom position while inspecting the graph.
+
 # Browser Architecture
 
 The browser contains three main frontend technologies:

@@ -86,6 +86,9 @@ The dedicated Processes page provides:
 - live search by process name, PID or PPID
 - sortable process columns
 - table and expandable process-tree views
+- interactive graph view using Cytoscape.js and Dagre
+- pan, zoom, fit and manual graph relayout controls
+- CPU-coloured, memory-sized process nodes with parent/child edges
 
 The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 

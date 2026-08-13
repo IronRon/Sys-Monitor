@@ -1438,6 +1438,31 @@ flowchart LR
 
 ---
 
+# Interactive Process Graph
+
+The Processes page now has a third **Graph** view in addition to the Table and expandable Tree views. It reuses the same flat process objects returned by `/api/processes/`.
+
+```text
+process object -> Cytoscape node
+PID/PPID relationship -> directed edge
+```
+
+`processes.js` uses **Cytoscape.js** to render the interactive graph and **cytoscape-dagre** to calculate an initial top-to-bottom tree layout. The graph supports panning, zooming, fit-to-view, manual relayout, search highlighting and node selection.
+
+Process node colour represents CPU activity bands, while node size is influenced by memory usage. Clicking a node opens a small details panel containing PID, PPID, CPU, memory and child count.
+
+The graph is not fully recreated every second. Live polling updates node values, colours and sizes while preserving positions. If processes start or stop, the graph marks the layout as needing recalculation rather than automatically moving the whole graph while the user is exploring it.
+
+```mermaid
+flowchart LR
+    API["/api/processes/"] --> DATA["Flat process list"]
+    DATA --> NODES["Cytoscape nodes"]
+    DATA --> EDGES["PID/PPID edges"]
+    NODES --> DAGRE["Dagre layout"]
+    EDGES --> DAGRE
+    DAGRE --> GRAPH["Pan / zoom process graph"]
+```
+
 # Current Limitations
 
 The frontend is intentionally still simple.

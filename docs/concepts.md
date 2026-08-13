@@ -957,6 +957,58 @@ It only visualises data supplied by the application.
 
 ---
 
+## Graph / Node / Edge
+
+A graph is a data structure made from **nodes** and **edges**. In the process graph, each running process is a node and each parent-to-child PID relationship is a directed edge.
+
+---
+
+## Directed Graph
+
+A directed graph has edges with a direction. Sys Monitor draws process relationships as:
+
+```text
+parent PID -> child PID
+```
+
+---
+
+## Process Forest
+
+A forest is a collection of separate trees. The process graph may have several roots because some process parents are not present or accessible in the current process list.
+
+---
+
+## Cytoscape.js
+
+Cytoscape.js is the frontend graph visualisation library used by the Processes Graph view. It stores and renders nodes and edges and provides interactions such as pan, zoom, selection and styling.
+
+---
+
+## Graph Layout Algorithm
+
+A graph layout algorithm calculates positions for nodes so relationships are easier to understand visually. Sys Monitor uses the Dagre extension for the initial directed process-tree layout.
+
+---
+
+## Dagre
+
+Dagre is a directed graph layout algorithm. In Sys Monitor it arranges parent processes above child processes in a top-to-bottom hierarchy.
+
+---
+
+## Topology
+
+Graph topology describes which nodes and edges exist and how they are connected. The Processes page compares PID/PPID topology between refreshes so it can detect when processes start, stop or change relationships without moving the entire graph every second.
+
+---
+
+## Pan and Zoom
+
+Panning moves the graph viewport across a larger graph space. Zooming changes the scale. Together they let the process graph behave like a large navigable canvas even when the complete process forest cannot fit on screen.
+
+---
+
 # Backend vs Frontend
 
 The **backend** currently consists mainly of Python and Django.
@@ -1344,6 +1396,12 @@ The main new ideas introduced by the project so far include:
 * HTML `<details>` / `<summary>`
 * frontend state
 * Chart.js
+* graphs, nodes and directed edges
+* process forests
+* Cytoscape.js
+* graph layout algorithms and Dagre
+* graph topology
+* pan and zoom interaction
 * frontend/backend separation
 * Markdown
 * Markdown rendering

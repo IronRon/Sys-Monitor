@@ -1842,6 +1842,10 @@ These are not all implemented yet.
 
 ---
 
+## Process graph consumer
+
+`/api/processes/` now also powers the interactive process graph. The frontend converts the same flat PID/PPID process list into graph nodes and directed parent-to-child edges, so no additional graph endpoint is needed.
+
 # Current API Characteristics
 
 The current APIs are:
