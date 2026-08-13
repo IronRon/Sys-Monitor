@@ -9,6 +9,16 @@ The project is also intended as a learning tool for operating-system and compute
 
 ---
 
+![Overview Page](img\127.0.0.1_8000_.png)
+
+![Process Page List](img\127.0.0.1_8000_processes_.png)
+
+![Process Page Tree](img\127.0.0.1_8000_processes_(1).png)
+
+![Process Page Graph](img\127.0.0.1_8000_processes_(2).png)
+
+![Documentation Page](img\127.0.0.1_8000_docs_.png)
+
 ## Quickstart
 
 Prerequisites:
