@@ -55,62 +55,61 @@
 
         <section class="metric-grid">
 
-            <article class="metric-card">
+            <article class="metric-card metric-card-cpu" id="cpu-card">
+                <div class="metric-top">
+                    <span class="metric-badge">CPU</span>
+                    <span class="metric-state" id="cpu-state">--</span>
+                </div>
 
-                <span class="metric-label">
-                    CPU
-                </span>
-
-                <strong class="metric-value" id="cpu-value">
-                    --%
-                </strong>
+                <strong class="metric-value" id="cpu-value">--%</strong>
 
                 <span class="metric-detail">
                     Total utilisation
                 </span>
 
+                <div class="metric-meter">
+                    <div class="metric-meter-fill" id="cpu-meter"></div>
+                </div>
             </article>
 
 
-            <article class="metric-card">
+            <article class="metric-card metric-card-memory" id="memory-card">
+                <div class="metric-top">
+                    <span class="metric-badge">RAM</span>
+                    <span class="metric-state" id="memory-state">--</span>
+                </div>
 
-                <span class="metric-label">
-                    Memory
-                </span>
+                <strong class="metric-value" id="memory-value">--%</strong>
 
-                <strong class="metric-value" id="memory-value">
-                    --%
-                </strong>
+                <span class="metric-detail" id="memory-detail">--</span>
 
-                <span class="metric-detail" id="memory-detail">
-                    --
-                </span>
-
+                <div class="metric-meter">
+                    <div class="metric-meter-fill" id="memory-meter"></div>
+                </div>
             </article>
 
 
-            <article class="metric-card">
+            <article class="metric-card metric-card-disk" id="disk-card">
+                <div class="metric-top">
+                    <span class="metric-badge">DISK</span>
+                    <span class="metric-state" id="disk-state">--</span>
+                </div>
 
-                <span class="metric-label">
-                    Disk
-                </span>
+                <strong class="metric-value" id="disk-value">--%</strong>
 
-                <strong class="metric-value" id="disk-value">
-                    --%
-                </strong>
+                <span class="metric-detail" id="disk-detail">--</span>
 
-                <span class="metric-detail" id="disk-detail">
-                    --
-                </span>
-
+                <div class="metric-meter">
+                    <div class="metric-meter-fill" id="disk-meter"></div>
+                </div>
             </article>
 
 
-            <article class="metric-card">
-
-                <span class="metric-label">
-                    Network
-                </span>
+            <article class="metric-card metric-card-network" id="network-card">
+                <div class="metric-top">
+                    <span class="metric-badge">NET</span>
+                    <span class="metric-state" id="network-state">Live</span>
+                </div>
 
                 <strong class="metric-value network-value" id="network-value">
                     ↓ -- MB/s
@@ -120,10 +119,12 @@
                     ↑ -- MB/s
                 </span>
 
+                <div class="metric-meter">
+                    <div class="metric-meter-fill" id="network-meter"></div>
+                </div>
             </article>
 
         </section>
-
 
         <section class="chart-card">
 
