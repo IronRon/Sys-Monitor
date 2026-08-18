@@ -1120,6 +1120,71 @@ This allows different interfaces to format the same data differently.
 
 ---
 
+
+# Hardware Identification Concepts
+
+## Static vs Live Data
+
+Not every piece of system information needs the same sampling strategy. CPU utilisation and network throughput change continuously, while a CPU model or motherboard model rarely changes during a program run.
+
+Sys Monitor therefore separates:
+
+```text
+live telemetry
+    → background sampling
+
+static hardware identity
+    → collect once + cache
+```
+
+## CIM
+
+CIM stands for **Common Information Model**. Windows exposes structured management information about components such as processors, memory, video controllers, systems, motherboards and firmware. The hardware collector asks PowerShell to query this information and return it as JSON.
+
+## Normalisation
+
+Normalisation converts source-specific data into the application's own consistent representation.
+
+For example:
+
+```text
+Windows: NumberOfLogicalProcessors
+        ↓
+Sys Monitor: logical_processors
+```
+
+The hardware normalizer also cleans placeholder firmware values and parses dates into a consistent format.
+
+## Caching
+
+Caching means keeping a previously computed or retrieved result so it can be reused without repeating the expensive operation. `HardwareService` caches the discovered hardware because motherboard, BIOS, RAM-module and CPU-model information does not need to be queried once per second.
+
+## Data Provenance
+
+Data provenance means keeping track of where a value came from and how trustworthy it is. Monitoring software should not imply more certainty than the source provides.
+
+For example, Sys Monitor labels a GPU value as:
+
+```text
+Windows-reported VRAM
+```
+
+instead of assuming the value is always an authoritative manufacturer specification.
+
+## Property-Driven Explanation
+
+The hardware explanation engine generates educational text from detected properties rather than storing a paragraph for every possible hardware model.
+
+Examples:
+
+- `logical_processors > physical_cores` can explain logical CPU scheduling targets
+- two equal-size DIMMs can explain matched memory modules
+- `media_type = SSD` can explain solid-state storage
+- `bus_type = NVMe` can explain NVMe
+
+This keeps the teaching layer reusable across different PCs.
+
+---
 # Documentation Concepts
 
 ## Markdown
@@ -1464,5 +1529,11 @@ The main new ideas introduced by the project so far include:
 * Mermaid diagrams
 * CDNs
 * source-of-truth documentation
+* static vs live system data
+* Windows CIM hardware discovery
+* hardware-data normalisation
+* caching
+* data provenance and measurement uncertainty
+* property-driven hardware explanations
 
 These concepts will continue to become more concrete as Sys Monitor grows.

@@ -129,7 +129,13 @@ Sys_Monitor/
     │   ├── memory.py
     │   ├── disk.py
     │   ├── network.py
-    │   └── processes.py
+    │   ├── processes.py
+    │   └── hardware.py
+    │
+    ├── hardware/
+    │   ├── __init__.py
+    │   ├── normalizer.py
+    │   └── explanations.py
     │
     ├── monitoring/
     │   ├── __init__.py
@@ -144,16 +150,19 @@ Sys_Monitor/
     │   ├── templates/
     │   │   └── dashboard/
     │   │       ├── index.html
-    │   │       └── processes.html
+    │   │       ├── processes.html
+    │   │       └── hardware.html
     │   │
     │   └── static/
     │       └── dashboard/
     │           ├── css/
     │           │   ├── dashboard.css
-    │           │   └── processes.css
+    │           │   ├── processes.css
+    │           │   └── hardware.css
     │           └── js/
     │               ├── dashboard.js
-    │               └── processes.js
+    │               ├── processes.js
+    │               └── hardware.js
     │
     ├── config/
     │   ├── settings.py
@@ -180,6 +189,12 @@ flowchart LR
         DISK["disk.py"]
         NET["network.py"]
         PROC["processes.py"]
+        HARDWARE["hardware.py"]
+    end
+
+    subgraph HardwareLayer["Static Hardware Layer"]
+        NORMALIZER["hardware/normalizer.py"]
+        EXPLAIN["hardware/explanations.py"]
     end
 
     subgraph Monitoring["Monitoring Layer"]
@@ -194,14 +209,15 @@ flowchart LR
 
     subgraph Web["Django Layer"]
         SERVICE["BackgroundMonitoringService"]
+        HSERVICE["HardwareService"]
         VIEWS["views.py"]
         URLS["urls.py"]
     end
 
     subgraph Frontend["Browser"]
-        HTML["index.html / processes.html"]
-        JS["dashboard.js / processes.js"]
-        CSS["dashboard.css / processes.css"]
+        HTML["index.html / processes.html / hardware.html"]
+        JS["dashboard.js / processes.js / hardware.js"]
+        CSS["dashboard.css / processes.css / hardware.css"]
         CHART["Chart.js"]
     end
 
@@ -211,6 +227,11 @@ flowchart LR
     NET --> SAMPLER
     PROC --> SAMPLER
 
+    HARDWARE --> NORMALIZER
+    NORMALIZER --> EXPLAIN
+    NORMALIZER --> HSERVICE
+    EXPLAIN --> HSERVICE
+
     SAMPLER --> MONITOR
     HISTORY --> MONITOR
 
@@ -218,6 +239,7 @@ flowchart LR
     HISTORY --> SERVICE
 
     SERVICE --> VIEWS
+    HSERVICE --> VIEWS
     URLS --> VIEWS
 
     VIEWS --> HTML
@@ -925,6 +947,7 @@ flowchart LR
 
     subgraph ServiceLayer["Application Service"]
         SERVICE["BackgroundMonitoringService"]
+        HSERVICE["HardwareService"]
     end
 
     subgraph Core["Monitoring Core"]
@@ -1116,6 +1139,47 @@ Each process becomes a Cytoscape node. If its PPID is present in the current pro
 
 The initial layout is calculated by Dagre. Live refreshes then update existing graph elements without automatically rerunning the layout, which preserves the user's pan and zoom position while inspecting the graph.
 
+
+# Static Hardware Architecture
+
+The Hardware / About My PC feature follows a separate path from the one-second monitoring loop.
+
+```mermaid
+flowchart LR
+    WIN["Windows CIM / Storage Interfaces"]
+    PS["PowerShell"]
+    HC["hardware.py"]
+    N["normalizer.py"]
+    E["explanations.py"]
+    HS["HardwareService cache"]
+    API["/api/hardware/"]
+    JS["hardware.js"]
+    UI["About My PC page"]
+
+    WIN --> PS
+    PS --> HC
+    HC --> N
+    N --> HS
+    N --> E
+    E --> HS
+    HS --> API
+    API --> JS
+    JS --> UI
+```
+
+The important distinction is:
+
+```text
+BackgroundMonitoringService
+    = continuously changing performance telemetry
+
+HardwareService
+    = slow-changing hardware identity collected once and cached
+```
+
+The explanation layer derives generic educational text from detected properties instead of hard-coding a paragraph for every possible CPU, GPU, RAM or disk model.
+
+---
 # Browser Architecture
 
 The browser contains three main frontend technologies:
@@ -1689,6 +1753,7 @@ flowchart TD
         DISK["Disk"]
         NET["Network"]
         PROC["Processes"]
+        HW["Static Hardware"]
     end
 
     subgraph Monitoring["Monitoring"]
@@ -1702,6 +1767,7 @@ flowchart TD
 
     subgraph Django["Django Web Layer"]
         SERVICE["BackgroundMonitoringService"]
+        HSERVICE["HardwareService"]
         VIEW["Views"]
         API["/api/system/"]
     end
@@ -1725,6 +1791,9 @@ flowchart TD
     DISK --> SAMPLER
     NET --> SAMPLER
     PROC --> SAMPLER
+
+    HW --> HWSERVICE["HardwareService"]
+    HWSERVICE --> HWAPI["/api/hardware/"]
 
     SAMPLER --> HISTORY
 

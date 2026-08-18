@@ -1993,6 +1993,31 @@ Each layer performs a different transformation.
 
 ---
 
+
+# Static Hardware Data Is Kept Separate
+
+The live monitoring layer is designed for values that change continuously, such as CPU usage, RAM usage, disk throughput and processes. Hardware identity is handled separately.
+
+```text
+LIVE PERFORMANCE
+BackgroundMonitoringService
+        ↓
+sample ~once / second
+
+STATIC HARDWARE
+HardwareService
+        ↓
+collect once + cache
+```
+
+`HardwareService` calls the hardware collector, normalises the Windows/CIM result, builds educational explanations and caches the result for `/api/hardware/`. This avoids repeatedly querying motherboard, BIOS, RAM-module and hardware-model information that rarely changes while the program is running.
+
+This gives the project two distinct data lifecycles:
+
+- **live telemetry** — continuously sampled
+- **hardware identity** — collected on demand and cached
+
+---
 # Current Limitations
 
 The monitoring layer is still intentionally simple.

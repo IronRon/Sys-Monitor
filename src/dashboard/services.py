@@ -6,6 +6,82 @@ import time
 from monitoring.history import MonitorHistory
 from monitoring.sampler import SystemSampler
 
+from collectors.hardware import (
+    get_hardware_info,
+)
+
+from hardware.normalizer import (
+    normalize_hardware,
+)
+
+from hardware.explanations import (
+    explain_cpu,
+    explain_memory,
+    explain_disk,
+)
+
+
+class HardwareService:
+
+    def __init__(self):
+        self._hardware = None
+
+
+    def refresh(self):
+        raw = get_hardware_info()
+
+        hardware = normalize_hardware(raw)
+
+
+        explanations = {
+
+            "cpu":
+                explain_cpu(
+                    hardware["cpu"]
+                ),
+
+            "memory":
+                explain_memory(
+                    hardware["memory"]
+                ),
+
+            "disks": [
+                {
+                    "disk_index": index,
+                    "name": disk["name"],
+                    "items": explain_disk(disk),
+                }
+
+                for index, disk
+                in enumerate(hardware["disks"])
+            ],
+        }
+
+
+        self._hardware = {
+            "hardware":
+                hardware,
+
+            "explanations":
+                explanations,
+        }
+
+
+        return self._hardware
+
+
+    def get_hardware_data(self):
+
+        if self._hardware is None:
+
+            return self.refresh()
+
+
+        return self._hardware
+
+
+hardware_service = HardwareService()
+
 
 class BackgroundMonitoringService:
 

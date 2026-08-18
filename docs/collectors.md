@@ -45,11 +45,15 @@ flowchart TD
     Psutil --> Network[Network Collector]
     Psutil --> Processes[Process Collector]
 
+    Windows --> Hardware[Hardware Collector]
+
     CPU --> Sampler[SystemSampler]
     Memory --> Sampler
     Disk --> Sampler
     Network --> Sampler
     Processes --> Sampler
+
+    Hardware --> HardwareService[HardwareService]
 ```
 
 The collector layer can therefore be thought of as an **adapter** between Windows system information and the rest of the Python application.
@@ -1520,6 +1524,68 @@ This is now displayed in the dashboard's Top Memory Processes table.
 
 ---
 
+
+# Hardware Collector
+
+File:
+
+```text
+src/collectors/hardware.py
+```
+
+The hardware collector is different from the live psutil collectors. It retrieves **static or slow-changing hardware identity data** from Windows using PowerShell/CIM queries and `Get-PhysicalDisk`.
+
+It currently discovers:
+
+- CPU model, manufacturer, core counts, reported clock and cache sizes
+- GPU model, driver and Windows-reported adapter memory
+- physical RAM modules, slots, capacities and speeds
+- physical disks, media type, bus type, size and health
+- system manufacturer/model and architecture
+- motherboard information
+- BIOS/firmware information
+
+Conceptually:
+
+```text
+Python
+   ↓
+PowerShell
+   ↓
+Windows CIM / storage interfaces
+   ↓
+JSON
+   ↓
+hardware.py
+```
+
+Unlike CPU, disk or network activity, these values do not need to be sampled once per second. `HardwareService` collects them on demand and caches the result.
+
+## Raw Hardware Data vs Normalised Hardware Data
+
+Windows property names such as `NumberOfLogicalProcessors`, `ConfiguredClockSpeed` and `SMBIOSBIOSVersion` are converted by `hardware/normalizer.py` into application-friendly names such as:
+
+```text
+logical_processors
+configured_speed_mt_s
+version
+```
+
+The normalizer also cleans placeholder firmware values such as blank part numbers or `0000` manufacturers.
+
+## Hardware Reporting Limitations
+
+Hardware metadata depends on firmware, drivers and the Windows interface being queried. A value being available does not guarantee that it is perfectly authoritative.
+
+For example, the GPU field is intentionally named:
+
+```text
+reported_vram_bytes
+```
+
+rather than simply `vram_bytes`, because Windows graphics interfaces may report adapter-memory values imperfectly on some modern GPUs. The frontend preserves this uncertainty by labelling the value as **Windows-reported VRAM**.
+
+---
 # Collector Responsibilities
 
 The collector layer should remain relatively simple.
@@ -1624,7 +1690,6 @@ Current limitations include:
 
 * no CPU clock-speed monitoring
 * no temperature monitoring
-* no CPU model information
 * no interrupt monitoring
 * no context-switch monitoring
 * no kernel/user CPU split in the dashboard
@@ -1681,12 +1746,11 @@ collectors/
 ├── disk.py
 ├── network.py
 ├── processes.py
+├── hardware.py          # current static hardware identity
 │
-├── gpu.py
-├── system.py
+├── gpu.py               # possible live GPU metrics
 ├── services.py
-├── connections.py
-└── hardware.py
+└── connections.py
 ```
 
 Possible metrics include:

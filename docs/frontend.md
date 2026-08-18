@@ -70,17 +70,20 @@ src/dashboard/
 ├── templates/
 │   └── dashboard/
 │       ├── index.html
-│       └── processes.html
+│       ├── processes.html
+│       └── hardware.html
 │
 └── static/
     └── dashboard/
         ├── css/
         │   ├── dashboard.css
-        │   └── processes.css
+        │   ├── processes.css
+        │   └── hardware.css
         │
         └── js/
             ├── dashboard.js
-            └── processes.js
+            ├── processes.js
+            └── hardware.js
 ```
 
 ---
@@ -1463,6 +1466,39 @@ flowchart LR
     DAGRE --> GRAPH["Pan / zoom process graph"]
 ```
 
+
+# Hardware / About My PC Page
+
+The `/hardware/` page is a static-hardware presentation rather than another one-second live dashboard. `hardware.js` requests:
+
+```text
+GET /api/hardware/
+```
+
+and turns the returned hardware JSON into visual CPU, GPU, RAM, disk and platform sections.
+
+The page is **data-driven**. The HTML contains containers, while JavaScript creates repeated components from arrays such as:
+
+```text
+gpus[]
+memory.modules[]
+disks[]
+explanation items[]
+```
+
+For example, a computer with two RAM modules produces two DIMM cards, while a machine with four modules would automatically produce four cards without changing the template.
+
+The page deliberately distinguishes raw facts from interpretation:
+
+```text
+/api/hardware/
+    ├── hardware      → facts discovered from Windows
+    └── explanations  → what those facts mean
+```
+
+Some labels also preserve data provenance. For example, the GPU UI displays **Windows-reported VRAM** rather than simply `VRAM` because that Windows field may not always match a modern GPU's authoritative specification.
+
+---
 # Current Limitations
 
 The frontend is intentionally still simple.
@@ -1487,7 +1523,7 @@ Near-term frontend work can now focus on richer graphs, more detailed process in
 
 # Current Frontend Architecture
 
-The project now has three browser-facing areas: the overview dashboard, the dedicated Processes page and the documentation site.
+The project now has four browser-facing areas: the overview dashboard, the dedicated Processes page, the Hardware / About My PC page and the documentation site.
 
 ```mermaid
 flowchart TD
@@ -1528,6 +1564,19 @@ flowchart TD
         PCSS --> PTREE
         PJS --> PTABLE
         PJS --> PTREE
+    end
+
+    subgraph Hardware["Hardware / About My PC"]
+        HTEMPLATE["hardware.html"]
+        HCSS["hardware.css"]
+        HJS["hardware.js"]
+        HAPI["/api/hardware/"]
+        HUI["CPU / GPU / RAM / Disk / Platform UI"]
+
+        HAPI -->|"JSON"| HJS
+        HTEMPLATE --> HUI
+        HCSS --> HUI
+        HJS --> HUI
     end
 
     subgraph Docs["Documentation Site"]

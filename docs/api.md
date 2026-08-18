@@ -34,12 +34,14 @@ Current routes:
 | ------ | -------------- | ------------------------------------------------------- |
 | `GET` | `/` | Render the overview dashboard |
 | `GET` | `/processes/` | Render the dedicated Processes page |
+| `GET` | `/hardware/` | Render the About My PC / Hardware page |
 | `GET` | `/api/system/` | Retrieve current system data and recent CPU history |
 | `GET` | `/api/processes/` | Retrieve the complete current process list |
+| `GET` | `/api/hardware/` | Retrieve cached static hardware identity and explanations |
 
-`/api/system/` and `/api/processes/` are the current **API endpoints** because they return machine-readable JSON.
+`/api/system/`, `/api/processes/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
 
-The project also has normal Django HTML routes such as `/`, `/processes/` and `/docs/.../`. These return web pages rather than API data.
+The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/` and `/docs/.../`. These return web pages rather than API data.
 
 ---
 
@@ -1943,6 +1945,7 @@ Potential future API structure:
 │
 ├── system/        # current
 ├── processes/     # current
+├── hardware/      # current
 ├── cpu/            # possible future
 ├── memory/         # possible future
 ├── disk/           # possible future
@@ -2039,6 +2042,43 @@ Could return information per network adapter:
 
 ---
 
+
+# `GET /api/hardware/`
+
+## Purpose
+
+Return the PC's static hardware identity together with generic educational explanations derived from the detected properties.
+
+Unlike `/api/system/` and `/api/processes/`, this endpoint does **not** trigger or read the one-second performance stream. `HardwareService` queries the hardware once, normalises the result and caches it.
+
+The response is organised into two top-level areas:
+
+```text
+hardware
+├── system
+├── cpu
+├── gpus[]
+├── memory
+│   └── modules[]
+├── motherboard
+├── bios
+└── disks[]
+
+explanations
+├── cpu[]
+├── memory[]
+├── gpus[]        # when provided
+├── disks[]
+├── system[]      # when provided
+├── motherboard[] # when provided
+└── bios[]        # when provided
+```
+
+The hardware values are normalised into application-friendly names such as `physical_cores`, `logical_processors`, `configured_speed_mt_s` and `reported_vram_bytes`. The `reported_` prefix is used where the Windows value may not be authoritative enough to present as an absolute specification.
+
+The explanatory text is property-driven. For example, two equal-capacity RAM modules can produce a "Matched memory modules" explanation, while an NVMe SSD can produce explanations for SSD storage and the NVMe protocol. This avoids maintaining hard-coded descriptions for every possible hardware model.
+
+---
 # `GET /api/processes/`
 
 The dedicated Processes page uses a separate endpoint for the complete live process list.
@@ -2453,7 +2493,7 @@ flowchart TD
 
 # Summary
 
-The current Sys Monitor API provides one primary monitoring endpoint:
+The current Sys Monitor API provides live monitoring endpoints plus a cached hardware-information endpoint. The primary overview endpoint remains:
 
 ```text
 GET /api/system/

@@ -1,7 +1,10 @@
 from django.http import JsonResponse
 from django.shortcuts import render
 
-from .services import monitoring_service
+from .services import (
+    monitoring_service,
+    hardware_service,
+)
 
 
 def index(request):
@@ -42,3 +45,20 @@ def processes_api(request):
     )
 
     return JsonResponse(data)
+
+def hardware_page(request):
+
+    return render(
+        request,
+        "dashboard/hardware.html",
+    )
+
+
+def hardware_api(request):
+
+    data = hardware_service.get_hardware_data()
+
+
+    return JsonResponse(
+        data
+    )

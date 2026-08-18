@@ -47,6 +47,16 @@ python -m src.monitor
 - Network upload throughput
 - Running process count
 
+### Static Hardware Identification
+
+- Windows-discovered CPU model, core counts, reported clock and cache
+- GPU model, driver and Windows-reported video memory
+- Physical RAM modules, capacities, slots and rated/configured speeds
+- Physical disk model, capacity, media type, bus type and health
+- Motherboard, BIOS/firmware and system architecture information
+- Generic explanations generated from the detected hardware properties
+- Hardware data is collected once and cached rather than sampled every second
+
 ### Process Monitoring
 
 - Process ID (PID)
@@ -79,7 +89,8 @@ The project currently provides:
 1. A terminal-based monitor
 2. A Django overview dashboard
 3. A dedicated Django Processes page
-4. A Django documentation area
+4. A Django **About My PC / Hardware** page
+5. A Django documentation area
 
 The web dashboard currently displays:
 
@@ -105,6 +116,8 @@ The dedicated Processes page provides:
 - pan, zoom, fit and manual graph relayout controls
 - CPU-coloured, memory-sized process nodes with parent/child edges
 
+The Hardware page under `/hardware/` displays static PC specifications discovered from Windows and explains concepts such as physical/logical cores, CPU cache, RAM module speeds, SSD/NVMe storage and system architecture.
+
 The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 
 ---
@@ -120,6 +133,7 @@ The project currently uses:
 - CSS
 - JavaScript
 - Chart.js
+- Windows PowerShell / CIM hardware queries
 
 ---
 
@@ -140,7 +154,12 @@ Sys_Monitor/
     │   ├── memory.py
     │   ├── disk.py
     │   ├── network.py
-    │   └── processes.py
+    │   ├── processes.py
+    │   └── hardware.py
+    │
+    ├── hardware/
+    │   ├── normalizer.py
+    │   └── explanations.py
     │
     ├── monitoring/
     │   ├── sampler.py
@@ -175,45 +194,32 @@ The application separates system-data collection from presentation.
 ```text
 Windows
    │
-   ▼
-psutil
-   │
-   ▼
-Collectors
-   │
-   ├── CPU
-   ├── Memory
-   ├── Disk
-   ├── Network
-   └── Processes
-   │
-   ▼
-SystemSampler
-   │
-   ├── Combines collector data
-   ├── Calculates disk throughput
-   ├── Calculates network throughput
-   └── Creates system snapshots
-   │
-   ▼
-BackgroundMonitoringService
-   │
-   ├── Background thread samples ~once/sec
-   ├── Latest complete sample
-   └── MonitorHistory (latest 60 lightweight samples)
-   │
-   ├──────────────────────────────┐
-   ▼                              ▼
-/api/system/                 /api/processes/
+   ├── psutil ──────────────── live performance collectors
    │                              │
-   └──────────── Django ──────────┘
-                 │
-                 ▼
-              Browser
-                                 │
-                      ┌──────────┴─────────┐
-                      ▼                    ▼
-                 Metric Cards          Chart.js
+   │                              ▼
+   │                         SystemSampler
+   │                              │
+   │                              ▼
+   │                 BackgroundMonitoringService
+   │                              │
+   │                    ┌─────────┴─────────┐
+   │                    ▼                   ▼
+   │              /api/system/       /api/processes/
+   │
+   └── PowerShell / CIM ─────── static hardware collector
+                                  │
+                                  ▼
+                         normalizer + explanations
+                                  │
+                                  ▼
+                           HardwareService
+                                  │
+                                  ▼
+                           /api/hardware/
+                                  │
+                    ┌─────────────┴─────────────┐
+                    ▼                           ▼
+             Live dashboards              About My PC
 ```
 
 The separation means the system-monitoring code is not tied to a particular user interface.
@@ -682,6 +688,7 @@ Near-term development:
 
 Possible later additions:
 
+- optional manufacturer/model-specific hardware enrichment
 - persistent monitoring history
 - SQLite/PostgreSQL storage
 - Windows service mode
@@ -694,7 +701,6 @@ Possible later additions:
 - anomaly detection
 - performance-event investigation
 - Windows Performance Counters
-- WMI
 - Event Tracing for Windows
 - deeper Windows internals
 

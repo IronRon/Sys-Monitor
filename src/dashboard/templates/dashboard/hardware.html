@@ -1,0 +1,583 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>About My PC | Sys Monitor</title>
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/hardware.css' %}">
+
+</head>
+
+
+<body>
+
+    <main class="hardware-page">
+
+        <!-- Header -->
+
+        <header class="hardware-header">
+
+            <div>
+
+                <span class="page-eyebrow">
+                    SYS MONITOR
+                </span>
+
+                <h1>
+                    About My PC
+                </h1>
+
+                <p>
+                    Hardware discovered directly from Windows
+                </p>
+
+            </div>
+
+
+            <nav class="main-nav">
+
+                <a href="/">
+                    Overview
+                </a>
+
+                <a href="/processes/">
+                    Processes
+                </a>
+
+                <a href="/hardware/" class="active">
+                    Hardware
+                </a>
+
+                <a href="/docs/">
+                    Docs
+                </a>
+
+            </nav>
+
+        </header>
+
+
+        <!-- Loading -->
+
+        <section id="hardware-loading" class="hardware-loading">
+
+            <div class="loading-orbit">
+                <div></div>
+            </div>
+
+            <span>
+                Asking Windows about your hardware...
+            </span>
+
+        </section>
+
+
+        <!-- Error -->
+
+        <section id="hardware-error" class="hardware-error hidden">
+
+            <strong>
+                Unable to retrieve hardware information
+            </strong>
+
+            <p id="hardware-error-message">
+            </p>
+
+        </section>
+
+
+        <!-- Main content -->
+
+        <div id="hardware-content" class="hidden">
+
+            <!-- Hero -->
+
+            <section class="pc-hero">
+
+                <div class="pc-identity">
+
+                    <span class="section-label">
+                        THIS COMPUTER
+                    </span>
+
+                    <h2 id="system-model">
+                        --
+                    </h2>
+
+                    <div class="identity-tags">
+
+                        <span id="system-manufacturer">
+                            --
+                        </span>
+
+                        <span id="system-type">
+                            --
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div class="hero-spec-grid">
+
+                    <article class="hero-spec hero-cpu">
+
+                        <span class="hero-spec-label">
+                            PROCESSOR
+                        </span>
+
+                        <strong id="summary-cpu">
+                            --
+                        </strong>
+
+                        <span id="summary-cpu-detail">
+                            --
+                        </span>
+
+                    </article>
+
+
+                    <article class="hero-spec hero-gpu">
+
+                        <span class="hero-spec-label">
+                            GRAPHICS
+                        </span>
+
+                        <strong id="summary-gpu">
+                            --
+                        </strong>
+
+                        <span id="summary-gpu-detail">
+                            --
+                        </span>
+
+                    </article>
+
+
+                    <article class="hero-spec hero-memory">
+
+                        <span class="hero-spec-label">
+                            MEMORY
+                        </span>
+
+                        <strong id="summary-memory">
+                            --
+                        </strong>
+
+                        <span id="summary-memory-detail">
+                            --
+                        </span>
+
+                    </article>
+
+
+                    <article class="hero-spec hero-storage">
+
+                        <span class="hero-spec-label">
+                            STORAGE
+                        </span>
+
+                        <strong id="summary-storage">
+                            --
+                        </strong>
+
+                        <span id="summary-storage-detail">
+                            --
+                        </span>
+
+                    </article>
+
+                </div>
+
+            </section>
+
+
+            <!-- CPU -->
+
+            <section class="hardware-section cpu-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <span class="section-label">
+                            PROCESSOR
+                        </span>
+
+                        <h2 id="cpu-name">
+                            --
+                        </h2>
+
+                        <p>
+                            The main general-purpose processor in your PC.
+                        </p>
+
+                    </div>
+
+
+                    <span class="manufacturer-pill" id="cpu-manufacturer">
+                        --
+                    </span>
+
+                </div>
+
+
+                <div class="cpu-layout">
+
+                    <div class="cpu-visual-panel">
+
+                        <div class="cpu-chip">
+
+                            <div class="chip-pins chip-pins-top"></div>
+                            <div class="chip-pins chip-pins-right"></div>
+                            <div class="chip-pins chip-pins-bottom"></div>
+                            <div class="chip-pins chip-pins-left"></div>
+
+                            <div class="cpu-chip-inner">
+
+                                <span>
+                                    CPU
+                                </span>
+
+                                <strong id="cpu-chip-name">
+                                    i9
+                                </strong>
+
+                                <small id="cpu-chip-model">
+                                    --
+                                </small>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="hardware-stat-grid">
+
+                        <article class="hardware-stat">
+
+                            <span>
+                                Physical Cores
+                            </span>
+
+                            <strong id="cpu-cores">
+                                --
+                            </strong>
+
+                            <small>
+                                Hardware execution cores
+                            </small>
+
+                        </article>
+
+
+                        <article class="hardware-stat">
+
+                            <span>
+                                Logical Processors
+                            </span>
+
+                            <strong id="cpu-logical">
+                                --
+                            </strong>
+
+                            <small>
+                                Visible to Windows scheduler
+                            </small>
+
+                        </article>
+
+
+                        <article class="hardware-stat">
+
+                            <span>
+                                Reported Clock
+                            </span>
+
+                            <strong id="cpu-clock">
+                                --
+                            </strong>
+
+                            <small>
+                                Windows CIM value
+                            </small>
+
+                        </article>
+
+
+                        <article class="hardware-stat">
+
+                            <span>
+                                L3 Cache
+                            </span>
+
+                            <strong id="cpu-l3">
+                                --
+                            </strong>
+
+                            <small>
+                                Fast processor cache
+                            </small>
+
+                        </article>
+
+
+                        <article class="hardware-stat">
+
+                            <span>
+                                L2 Cache
+                            </span>
+
+                            <strong id="cpu-l2">
+                                --
+                            </strong>
+
+                            <small>
+                                Closer per-core cache
+                            </small>
+
+                        </article>
+
+                    </div>
+
+                </div>
+
+
+                <div class="explanation-area">
+
+                    <div class="explanation-heading">
+                        <span>WHAT DOES THIS MEAN?</span>
+                    </div>
+
+                    <div class="explanation-grid" id="cpu-explanations">
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- GPU -->
+
+            <section class="hardware-section gpu-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <span class="section-label">
+                            GRAPHICS
+                        </span>
+
+                        <h2>
+                            Graphics Processor
+                        </h2>
+
+                        <p>
+                            Dedicated hardware for graphics and highly parallel workloads.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="gpu-grid" id="gpu-grid">
+                </div>
+
+            </section>
+
+
+            <!-- Memory -->
+
+            <section class="hardware-section memory-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <span class="section-label">
+                            MEMORY HARDWARE
+                        </span>
+
+                        <h2>
+                            <span id="memory-total">
+                                --
+                            </span>
+                            Installed RAM
+                        </h2>
+
+                        <p id="memory-module-summary">
+                            --
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="memory-module-grid" id="memory-modules">
+                </div>
+
+
+                <div class="explanation-area">
+
+                    <div class="explanation-heading">
+                        <span>WHAT DOES THIS MEAN?</span>
+                    </div>
+
+                    <div class="explanation-grid" id="memory-explanations">
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- Storage -->
+
+            <section class="hardware-section disk-section">
+
+                <div class="section-heading">
+
+                    <div>
+
+                        <span class="section-label">
+                            STORAGE
+                        </span>
+
+                        <h2>
+                            Physical Drives
+                        </h2>
+
+                        <p>
+                            Persistent storage devices discovered by Windows.
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <div class="disk-grid" id="disk-grid">
+                </div>
+
+            </section>
+
+
+            <!-- Platform -->
+
+            <section class="platform-grid">
+
+                <article class="platform-card">
+
+                    <span class="section-label">
+                        MOTHERBOARD
+                    </span>
+
+                    <h3 id="motherboard-product">
+                        --
+                    </h3>
+
+                    <dl>
+
+                        <div>
+                            <dt>Manufacturer</dt>
+                            <dd id="motherboard-manufacturer">--</dd>
+                        </div>
+
+                        <div>
+                            <dt>Version</dt>
+                            <dd id="motherboard-version">--</dd>
+                        </div>
+
+                    </dl>
+
+                </article>
+
+
+                <article class="platform-card">
+
+                    <span class="section-label">
+                        BIOS / FIRMWARE
+                    </span>
+
+                    <h3 id="bios-version">
+                        --
+                    </h3>
+
+                    <dl>
+
+                        <div>
+                            <dt>Vendor</dt>
+                            <dd id="bios-manufacturer">--</dd>
+                        </div>
+
+                        <div>
+                            <dt>Release Date</dt>
+                            <dd id="bios-date">--</dd>
+                        </div>
+
+                    </dl>
+
+                </article>
+
+
+                <article class="platform-card">
+
+                    <span class="section-label">
+                        SYSTEM
+                    </span>
+
+                    <h3 id="platform-type">
+                        --
+                    </h3>
+
+                    <dl>
+
+                        <div>
+                            <dt>Model</dt>
+                            <dd id="platform-model">--</dd>
+                        </div>
+
+                        <div>
+                            <dt>Memory reported by Windows</dt>
+                            <dd id="platform-memory">--</dd>
+                        </div>
+
+                    </dl>
+
+                </article>
+
+            </section>
+
+
+            <footer class="hardware-footer">
+
+                Hardware information is collected from Windows
+                CIM / hardware interfaces and cached by Sys Monitor.
+
+            </footer>
+
+        </div>
+
+    </main>
+
+
+    <script src="{% static 'dashboard/js/hardware.js' %}"></script>
+
+</body>
+
+</html>

@@ -23,4 +23,16 @@ urlpatterns = [
         views.processes_api,
         name="processes-api",
     ),
+
+    path(
+        "hardware/",
+        views.hardware_page,
+        name="hardware",
+    ),
+
+    path(
+        "api/hardware/",
+        views.hardware_api,
+        name="hardware-api",
+    ),
 ]
