@@ -1178,6 +1178,74 @@ Sys Monitor currently performs many conversions using powers of 1024 while the U
 
 ---
 
+# Network Concepts
+
+## Network Interface
+
+A network interface is an adapter or software endpoint through which the operating system can send and receive network traffic. Examples include Ethernet, Wi-Fi, loopback, VPN and virtual adapters. Sys Monitor now calculates throughput separately for each detected interface.
+
+## IP Address
+
+An IP address identifies a network endpoint. IPv4 commonly uses dotted decimal addresses such as `192.168.1.20`; IPv6 uses a larger hexadecimal address space.
+
+## Port
+
+A port is a numeric endpoint within an IP host. An IP address identifies the machine/interface while the port helps identify the particular network service or socket endpoint.
+
+## Socket
+
+A socket is an operating-system networking endpoint owned by a process or the system. Sys Monitor uses socket information to associate PIDs with local/remote addresses and connection states.
+
+## TCP
+
+TCP is a connection-oriented transport protocol that provides reliable, ordered delivery. TCP sockets move through states such as `LISTEN`, `SYN_SENT`, `ESTABLISHED` and `TIME_WAIT`.
+
+## UDP
+
+UDP is a datagram-oriented transport protocol. It does not establish the same persistent connection state as TCP, so a UDP socket may have no remote endpoint and no TCP-style `ESTABLISHED` state.
+
+## Local and Remote Endpoint
+
+A connection can be described by two endpoints:
+
+```text
+local IP : local port
+        ↕
+remote IP : remote port
+```
+
+The local endpoint belongs to this PC. The remote endpoint belongs to the other side of the communication when one exists.
+
+## DNS and Reverse DNS
+
+DNS normally resolves a hostname to an IP address. **Reverse DNS** attempts the opposite: given an IP address, find a hostname associated with it. Reverse-DNS results are optional metadata and are not guaranteed to exist.
+
+## Asynchronous Enrichment
+
+Sys Monitor does not block the Network API while waiting for reverse-DNS lookups. Unknown IPs are scheduled for resolution in a small background thread pool, while the API immediately returns the raw IP address. A later refresh can include the hostname if resolution succeeded.
+
+## MTU
+
+MTU means **Maximum Transmission Unit**. It describes the largest packet size, in bytes, that an interface can transmit without needing fragmentation at that interface layer.
+
+## Link Speed vs Throughput
+
+An interface may report a link speed such as `1000 Mbps`. This is not the same thing as current application throughput.
+
+```text
+link speed
+    → negotiated/theoretical interface link capacity
+
+current throughput
+    → how many bytes are actually moving per second now
+```
+
+## Connection Inspection vs Packet Capture
+
+The current Network page inspects operating-system **sockets/connections**. It does not yet capture individual packets or decode HTTP/TLS application payloads. Packet capture is a separate, higher-frequency monitoring problem and will require a dedicated capture worker rather than the one-second `SystemSampler`.
+
+---
+
 # Hardware Identification Concepts
 
 ## Static vs Live Data
@@ -1576,6 +1644,16 @@ The main new ideas introduced by the project so far include:
 * graph topology
 * pan and zoom interaction
 * frontend/backend separation
+* network interfaces and per-interface counters
+* IPv4 and IPv6 addresses
+* ports and sockets
+* TCP vs UDP
+* TCP connection states
+* local vs remote endpoints
+* DNS and reverse DNS
+* asynchronous hostname enrichment
+* MTU and link speed
+* connection inspection vs packet capture
 * Markdown
 * Markdown rendering
 * dynamic Django routes

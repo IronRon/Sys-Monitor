@@ -59,4 +59,16 @@ urlpatterns = [
         views.disk_api,
         name="disk-api",
     ),
+
+    path(
+        "network/",
+        views.network_page,
+        name="network",
+    ),
+
+    path(
+        "api/network/",
+        views.network_api,
+        name="network-api",
+    ),
 ]

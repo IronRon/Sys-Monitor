@@ -2001,13 +2001,14 @@ Each layer performs a different transformation.
 ---
 
 
-# Dedicated Memory and Disk Views
+# Dedicated Memory, Disk and Network Views
 
 The background sampler now supports dedicated resource pages without creating additional collection loops. `BackgroundMonitoringService` exposes:
 
 ```text
 /api/memory/
 /api/disk/
+/api/network/
 ```
 
 Both endpoints read the same latest sample and rolling history already maintained for the rest of the application.
@@ -2023,15 +2024,39 @@ flowchart TD
     SAMPLE --> DISKAPI["/api/disk/"]
     HISTORY --> DISKAPI
 
+    SAMPLE --> NETAPI["/api/network/"]
+    HISTORY --> NETAPI
+
     MEMAPI --> MEMPAGE["Memory page"]
     DISKAPI --> DISKPAGE["Disk page"]
+    NETAPI --> NETPAGE["Network page"]
 ```
 
 The Memory endpoint returns the current memory snapshot, memory history and a Top Memory process ranking derived from the **already collected complete process list**. It does not call `psutil.process_iter()` again.
 
 The Disk endpoint exposes the current capacity/read/write values and a 60-sample history of read/write throughput. It likewise performs no additional disk collection.
 
+The Network endpoint exposes the latest system-wide upload/download rates, per-interface rates and metadata, and the current socket list. Its history keeps only the lightweight upload/download rates rather than duplicating every socket across all 60 samples.
+
 The Memory and Disk pages also make one separate request to `/api/hardware/` for slow-changing DIMM and physical-drive information. This keeps live telemetry and static hardware identity separate.
+
+---
+
+# Asynchronous Hostname Enrichment
+
+Remote socket endpoints are initially identified by IP address. `HostnameResolver` performs best-effort reverse-DNS lookups in a small `ThreadPoolExecutor` rather than blocking the main monitoring or HTTP path.
+
+```text
+remote IP
+   ↓
+cache lookup
+   ├── hit  → return hostname
+   └── miss → schedule background DNS lookup
+                    ↓
+             later API response can include hostname
+```
+
+This is an example of **asynchronous enrichment**: the core network measurement remains useful immediately, while slower optional metadata can arrive later. Failed lookups are allowed and simply leave the hostname unavailable.
 
 ---
 
@@ -2071,6 +2096,9 @@ Current limitations include:
 * samples disappear when the application stops
 * memory history is high-level and does not yet include Windows standby/cache, pool or page-fault counters
 * disk throughput history is system-wide rather than attributed to individual processes or physical devices
+* network connection monitoring is socket-level rather than packet-level
+* network byte rates are not yet attributed directly to individual processes
+* reverse-DNS hostname enrichment is best-effort
 * no database persistence
 * no configurable sampling interval through the UI
 * no long-term aggregation

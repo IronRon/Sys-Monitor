@@ -20,6 +20,93 @@ from hardware.explanations import (
     explain_disk,
 )
 
+import socket
+
+from concurrent.futures import (
+    ThreadPoolExecutor,
+)
+
+class HostnameResolver:
+
+    def __init__(self):
+        self._cache = {}
+
+        self._pending = set()
+
+        self._lock = (
+            threading.Lock()
+        )
+
+        self._executor = (
+            ThreadPoolExecutor(
+                max_workers=4,
+                thread_name_prefix=(
+                    "dns-resolver"
+                ),
+            )
+        )
+
+
+    def get(self, ip):
+        if not ip:
+            return None
+
+
+        with self._lock:
+
+            if ip in self._cache:
+                return self._cache[ip]
+
+
+            if ip not in self._pending:
+
+                self._pending.add(ip)
+
+                self._executor.submit(
+                    self._resolve,
+                    ip,
+                )
+
+
+        return None
+
+
+    def _resolve(self, ip):
+
+        try:
+
+            hostname = (
+                socket.gethostbyaddr(
+                    ip
+                )[0]
+            )
+
+        except (
+            socket.herror,
+            socket.gaierror,
+            OSError,
+        ):
+            hostname = None
+
+
+        with self._lock:
+
+            self._cache[ip] = (
+                hostname
+            )
+
+            self._pending.discard(
+                ip
+            )
+
+
+    def stop(self):
+
+        self._executor.shutdown(
+            wait=False,
+            cancel_futures=True,
+        )
+
 
 class HardwareService:
 
@@ -255,9 +342,17 @@ class BackgroundMonitoringService:
                 sample["disk"]
             ),
 
-            "network": copy.deepcopy(
-                sample["network"]
-            ),
+            "network": {
+                "download_bytes_per_second":
+                    sample["network"][
+                        "download_bytes_per_second"
+                    ],
+
+                "upload_bytes_per_second":
+                    sample["network"][
+                        "upload_bytes_per_second"
+                    ],
+            },
 
             "processes": {
                 "count":
@@ -521,6 +616,147 @@ class BackgroundMonitoringService:
             ],
         }
 
+    def get_network_data(self):
+
+        sample, history = (
+            self._get_snapshot()
+        )
+
+
+        connections = (
+            copy.deepcopy(
+                sample["network"][
+                    "connections"
+                ]
+            )
+        )
+
+
+        established = 0
+        listening = 0
+        remote_count = 0
+
+
+        for connection in connections:
+
+            remote = (
+                connection["remote"]
+            )
+
+
+            if remote:
+
+                remote_count += 1
+
+                connection["hostname"] = (
+                    hostname_resolver.get(
+                        remote["ip"]
+                    )
+                )
+
+            else:
+
+                connection["hostname"] = (
+                    None
+                )
+
+
+            if (
+                connection["status"]
+                == "ESTABLISHED"
+            ):
+                established += 1
+
+
+            if (
+                connection["status"]
+                == "LISTEN"
+            ):
+                listening += 1
+
+
+        interfaces = (
+            sample["network"][
+                "interfaces"
+            ]
+        )
+
+
+        return {
+            "timestamp":
+                sample["timestamp"]
+                .isoformat(),
+
+
+            "network": {
+                "download_bytes_per_second":
+                    sample["network"][
+                        "download_bytes_per_second"
+                    ],
+
+                "upload_bytes_per_second":
+                    sample["network"][
+                        "upload_bytes_per_second"
+                    ],
+
+                "interfaces":
+                    interfaces,
+
+                "connections":
+                    connections,
+
+                "summary": {
+                    "total_sockets":
+                        len(connections),
+
+                    "remote_connections":
+                        remote_count,
+
+                    "established":
+                        established,
+
+                    "listening":
+                        listening,
+
+                    "interfaces_up":
+                        sum(
+                            1
+
+                            for interface
+                            in interfaces
+
+                            if interface[
+                                "is_up"
+                            ]
+                        ),
+                },
+            },
+
+
+            "history": [
+                {
+                    "timestamp":
+                        item["timestamp"]
+                        .isoformat(),
+
+                    "download_bytes_per_second":
+                        item["network"][
+                            "download_bytes_per_second"
+                        ],
+
+                    "upload_bytes_per_second":
+                        item["network"][
+                            "upload_bytes_per_second"
+                        ],
+                }
+
+                for item in history
+            ],
+        }
+
+hostname_resolver = (
+    HostnameResolver()
+)
 
 monitoring_service = BackgroundMonitoringService(
     sample_interval=1.0,
@@ -531,4 +767,8 @@ monitoring_service = BackgroundMonitoringService(
 # Try to stop cleanly when Python exits.
 atexit.register(
     monitoring_service.stop
+)
+
+atexit.register(
+    hostname_resolver.stop
 )

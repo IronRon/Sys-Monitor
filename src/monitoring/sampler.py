@@ -5,19 +5,24 @@ import psutil
 from collectors.cpu import get_cpu_usage
 from collectors.memory import get_memory_usage
 from collectors.disk import get_disk_usage
-from collectors.network import get_network_usage
 from collectors.processes import (
     prime_process_cpu,
     get_processes,
     get_top_cpu_processes,
     get_top_memory_processes,
 )
-
+from collectors.network import (
+    get_network_counters,
+    get_interface_counters,
+    get_network_connections,
+    get_network_interfaces,
+)
 
 class SystemSampler:
     def __init__(self):
         self.previous_disk = None
         self.previous_network = None
+        self.previous_interface_counters = None
 
     def prime(self):
         """
@@ -34,7 +39,12 @@ class SystemSampler:
 
         # Establish baseline cumulative counters.
         self.previous_disk = get_disk_usage()
-        self.previous_network = get_network_usage()
+        self.previous_network = (
+            get_network_counters()
+        )
+        self.previous_interface_counters = (
+            get_interface_counters()
+        )
 
     def sample(self, elapsed_seconds):
         """
@@ -44,8 +54,7 @@ class SystemSampler:
         cpu = get_cpu_usage()
         memory = get_memory_usage()
         disk = get_disk_usage()
-        network = get_network_usage()
-
+        network = (get_network_counters())
         processes = get_processes()
 
         top_cpu_processes = get_top_cpu_processes(
@@ -58,25 +67,79 @@ class SystemSampler:
             limit=5,
         )
 
-        disk_read_speed = (
+        disk_read_speed = max(
             disk["read_bytes"]
-            - self.previous_disk["read_bytes"]
+            - self.previous_disk["read_bytes"],
+            0,
         ) / elapsed_seconds
 
-        disk_write_speed = (
+        disk_write_speed = max(
             disk["write_bytes"]
-            - self.previous_disk["write_bytes"]
+            - self.previous_disk["write_bytes"],
+            0,
         ) / elapsed_seconds
 
-        download_speed = (
+        download_speed = max(
             network["bytes_received"]
-            - self.previous_network["bytes_received"]
+            - self.previous_network["bytes_received"],
+            0,
         ) / elapsed_seconds
 
-        upload_speed = (
+        upload_speed = max(
             network["bytes_sent"]
-            - self.previous_network["bytes_sent"]
+            - self.previous_network["bytes_sent"],
+            0,
         ) / elapsed_seconds
+
+        current_interface_counters = (
+            get_interface_counters()
+        )
+
+        interface_rates = (
+            self._calculate_interface_rates(
+                self.previous_interface_counters,
+                current_interface_counters,
+                elapsed_seconds,
+            )
+        )
+
+        interfaces = (
+            get_network_interfaces()
+        )
+
+        for interface in interfaces:
+
+            rates = interface_rates.get(
+                interface["name"],
+                {},
+            )
+
+            interface[
+                "download_bytes_per_second"
+            ] = rates.get(
+                "download_bytes_per_second",
+                0.0,
+            )
+
+            interface[
+                "upload_bytes_per_second"
+            ] = rates.get(
+                "upload_bytes_per_second",
+                0.0,
+            )
+
+        process_name_by_pid = {
+            process["pid"]:
+                process["name"]
+
+            for process in processes
+        }
+
+        connections = (
+            get_network_connections(
+                process_name_by_pid
+            )
+        )
 
         sample = {
             "timestamp": datetime.now(),
@@ -141,8 +204,17 @@ class SystemSampler:
             },
 
             "network": {
-                "download_bytes_per_second": download_speed,
-                "upload_bytes_per_second": upload_speed,
+                "download_bytes_per_second":
+                    download_speed,
+
+                "upload_bytes_per_second":
+                    upload_speed,
+
+                "interfaces":
+                    interfaces,
+
+                "connections":
+                    connections,
             },
 
             "processes": {
@@ -155,5 +227,80 @@ class SystemSampler:
 
         self.previous_disk = disk
         self.previous_network = network
+        self.previous_interface_counters = (
+            current_interface_counters
+        )
 
         return sample
+
+    def _calculate_interface_rates(
+        self,
+        previous,
+        current,
+        elapsed_seconds,
+    ):
+        rates = {}
+
+
+        if (
+            previous is None
+            or elapsed_seconds <= 0
+        ):
+            return rates
+
+
+        for name, current_values in (
+            current.items()
+        ):
+
+            previous_values = (
+                previous.get(name)
+            )
+
+
+            if previous_values is None:
+                continue
+
+
+            received_delta = max(
+                current_values[
+                    "bytes_received"
+                ]
+                -
+                previous_values[
+                    "bytes_received"
+                ],
+                0,
+            )
+
+
+            sent_delta = max(
+                current_values[
+                    "bytes_sent"
+                ]
+                -
+                previous_values[
+                    "bytes_sent"
+                ],
+                0,
+            )
+
+
+            rates[name] = {
+                "download_bytes_per_second":
+                    (
+                        received_delta
+                        /
+                        elapsed_seconds
+                    ),
+
+                "upload_bytes_per_second":
+                    (
+                        sent_delta
+                        /
+                        elapsed_seconds
+                    ),
+            }
+
+
+        return rates

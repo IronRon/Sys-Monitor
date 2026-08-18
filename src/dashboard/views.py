@@ -105,3 +105,20 @@ def disk_api(request):
     return JsonResponse(
         data
     )
+
+def network_page(request):
+
+    monitoring_service.start()
+
+    return render(
+        request,
+        "dashboard/network.html",
+    )
+
+
+def network_api(request):
+
+    return JsonResponse(
+        monitoring_service
+        .get_network_data()
+    )

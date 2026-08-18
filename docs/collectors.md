@@ -1083,20 +1083,112 @@ This calculation happens in `SystemSampler`, not inside the collector.
 
 ---
 
-# Future Network Monitoring
+# Per-Interface Network Monitoring
 
-Possible future improvements include:
+The Network collector now uses:
 
-* per-network-interface statistics
-* Wi-Fi vs Ethernet usage
-* IP addresses
-* TCP connections
-* UDP connections
-* listening ports
-* remote addresses
-* connection state
-* process owning each connection
-* per-process network usage
+```python
+psutil.net_io_counters(pernic=True)
+```
+
+to retrieve cumulative sent/received byte counters for each network interface. `SystemSampler` compares consecutive values to calculate per-interface download and upload rates.
+
+The collector also uses:
+
+```python
+psutil.net_if_addrs()
+psutil.net_if_stats()
+```
+
+to describe each adapter. The current interface model can include:
+
+```text
+name
+is_up
+speed_mbps
+mtu
+duplex
+addresses[]
+    ├── IPv4
+    ├── IPv6
+    └── MAC
+```
+
+This lets the Network page distinguish adapters such as Ethernet, Wi-Fi, loopback, VPN and virtual interfaces instead of treating networking as one anonymous total.
+
+---
+
+# Network Connections / Sockets
+
+The collector now calls:
+
+```python
+psutil.net_connections(kind="inet")
+```
+
+to obtain current IPv4/IPv6 TCP and UDP sockets. Each returned connection is normalised into data such as:
+
+```text
+pid
+process_name
+protocol       TCP / UDP
+family         IPv4 / IPv6
+local          IP + port
+remote         IP + port, when present
+status         ESTABLISHED / LISTEN / ...
+```
+
+A socket is a networking endpoint used by a process. A TCP connection can have states such as `LISTEN`, `SYN_SENT`, `ESTABLISHED` and `TIME_WAIT`. UDP does not establish a TCP-style connection and may therefore have no remote endpoint or meaningful TCP connection state.
+
+---
+
+# Mapping Connections to Processes
+
+`SystemSampler` already collects the current process list. It creates a small lookup:
+
+```text
+PID → process name
+```
+
+and passes that lookup into the network connection collector. This avoids enumerating every process a second time just to label sockets.
+
+Conceptually:
+
+```text
+Process collector
+      ↓
+complete process snapshot
+      ↓
+PID → name map
+      ↓
+network socket PID
+      ↓
+chrome.exe / python.exe / svchost.exe / ...
+```
+
+---
+
+# Connection Inspection vs Packet Capture
+
+The current collector observes **socket/connection state**, not individual packets or application payloads. It can answer questions such as:
+
+```text
+Which process owns this socket?
+What local port is it using?
+What remote IP/port is connected?
+Is the TCP socket established or listening?
+```
+
+but it does not currently show:
+
+```text
+individual packet contents
+HTTP request/response bodies
+TLS plaintext
+per-packet timing and headers
+```
+
+Packet capture is intentionally reserved for a later Network iteration using a dedicated capture worker rather than the one-second system sampler.
 
 ---
 
@@ -1750,11 +1842,11 @@ Current limitations include:
 
 ## Network
 
-* current values combine system-wide network activity
-* no per-interface monitoring
-* no TCP/UDP connection tables
-* no process-to-connection mapping
-* no Wi-Fi signal information
+* per-interface rates, addresses and adapter state are available, but no Wi-Fi signal/channel information
+* current socket inspection does not capture packets or application payloads
+* no direct per-process byte-throughput attribution
+* some PID/connection details can be unavailable because of OS permissions or short-lived sockets
+* reverse-DNS names are enrichment data and may not resolve
 
 ## Processes
 
@@ -1799,8 +1891,9 @@ Possible metrics include:
 * GPU memory
 * temperatures
 * Windows services
-* network connections
-* per-interface network throughput
+* packet capture / protocol decoding
+* Wi-Fi signal and channel information
+* per-process network byte attribution
 * disk latency
 * disk queue depth
 * system boot time
@@ -1834,10 +1927,13 @@ Disk
 └── I/O counters
 
 Network
-├── packets
-├── bytes
-├── sending
-└── receiving
+├── bytes and cumulative counters
+├── interfaces and adapters
+├── IPv4 / IPv6 / MAC addresses
+├── sockets
+├── TCP / UDP
+├── ports and connection state
+└── sending / receiving
 
 Processes
 ├── process

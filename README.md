@@ -46,7 +46,26 @@ python -m src.monitor
 - Disk write throughput
 - Network download throughput
 - Network upload throughput
+- Per-interface network throughput, addresses, link speed and MTU
+- Active TCP/UDP socket inspection with local/remote endpoints
+- Process-to-connection mapping and reverse-DNS hostname enrichment
 - Running process count
+
+
+### Network Monitoring
+
+- Dedicated `/network/` page
+- Live system-wide download and upload throughput
+- 60-second network throughput history
+- Per-interface upload/download rates
+- Interface up/down state, link speed and MTU
+- IPv4, IPv6 and MAC addresses
+- Current TCP and UDP sockets
+- Local and remote IP/port endpoints
+- TCP connection states such as `LISTEN` and `ESTABLISHED`
+- Owning PID and process name where Windows/psutil exposes them
+- Best-effort asynchronous reverse-DNS hostname lookup
+- Search, protocol filtering and remote-only connection filtering
 
 ### Static Hardware Identification
 
@@ -93,7 +112,8 @@ The project currently provides:
 4. A Django **About My PC / Hardware** page
 5. A dedicated Django Memory page
 6. A dedicated Django Disk page
-7. A Django documentation area
+7. A dedicated Django Network page
+8. A Django documentation area
 
 The web dashboard currently displays:
 
@@ -124,6 +144,8 @@ The Hardware page under `/hardware/` displays static PC specifications discovere
 The dedicated Memory page under `/memory/` combines the shared live sample stream with cached RAM hardware information. It displays physical-memory utilisation, in-use and available memory, page-file usage, a 60-second memory history graph, top memory-consuming processes and the installed RAM modules. It also explains concepts such as available memory, working sets, caching and paging.
 
 The dedicated Disk page under `/disk/` displays C: filesystem capacity, current read/write throughput, a 60-second I/O history graph and cached physical-drive information such as SSD/NVMe type, capacity and health. It deliberately distinguishes **storage capacity** from **disk activity**, and **filesystem volumes** from **physical drives**.
+
+The dedicated Network page under `/network/` displays live download/upload throughput, a 60-second traffic graph, detected network interfaces and a searchable current socket table. Connections show protocol, IPv4/IPv6 family, local and remote endpoints, TCP state, owning process/PID where available, and best-effort reverse-DNS hostnames. This is **connection/socket inspection**, not packet or HTTP-content capture.
 
 The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 
@@ -211,10 +233,10 @@ Windows
    │                              │
    │         ┌──────────┼──────────┬──────────┐
    │         ▼          ▼          ▼          ▼
-   │   /api/system/ /api/processes/ /api/memory/ /api/disk/
+   │   /api/system/ /api/processes/ /api/memory/ /api/disk/ /api/network/
    │         │          │          │          │
    │         ▼          ▼          ▼          ▼
-   │      Overview   Processes   Memory      Disk
+   │      Overview   Processes   Memory      Disk      Network
    │
    └── PowerShell / CIM ─────── static hardware collector
                                   │
@@ -683,7 +705,9 @@ Current limitations include:
 - no GPU performance monitoring
 - disk capacity is currently centred on the C: filesystem while physical-drive identity comes from the hardware service
 - no per-process or per-device live disk I/O breakdown yet
-- only basic network information
+- no packet capture or protocol-payload inspection yet
+- current socket data does not directly attribute byte throughput to individual processes
+- reverse-DNS hostnames are best-effort and may be unavailable
 - no persistent historical graphs beyond the in-memory 60-sample window
 - Chart.js is currently loaded externally
 
@@ -695,7 +719,7 @@ These limitations are expected to change as the project develops.
 
 Near-term development:
 
-- dedicated Network page and connection inspection
+- optional packet-capture / protocol-inspection Network v2
 - richer process details and diagnostics
 - navigation/layout cleanup as more pages are added
 - self-monitoring overhead and historical analytics
@@ -708,8 +732,9 @@ Possible later additions:
 - Windows service mode
 - GPU monitoring
 - disk-per-device monitoring
-- network-per-interface monitoring
-- process network activity
+- packet capture with Npcap/TShark
+- per-process network byte attribution
+- Wi-Fi signal/channel diagnostics
 - process disk activity
 - system alerts
 - anomaly detection

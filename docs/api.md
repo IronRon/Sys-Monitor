@@ -16,7 +16,7 @@ Browser / other clients
 
 The current API is intentionally small.
 
-The API now exposes a small set of specialised read-only endpoints over the same background monitoring state. `/api/system/` provides the overview payload, while `/api/processes/`, `/api/memory/` and `/api/disk/` provide focused views for their dedicated pages. Static hardware identity is exposed separately by `/api/hardware/`.
+The API now exposes a small set of specialised read-only endpoints over the same background monitoring state. `/api/system/` provides the overview payload, while `/api/processes/`, `/api/memory/`, `/api/disk/` and `/api/network/` provide focused views for their dedicated pages. Static hardware identity is exposed separately by `/api/hardware/`.
 
 ---
 
@@ -31,15 +31,17 @@ Current routes:
 | `GET` | `/hardware/` | Render the About My PC / Hardware page |
 | `GET` | `/memory/` | Render the dedicated Memory page |
 | `GET` | `/disk/` | Render the dedicated Disk page |
+| `GET` | `/network/` | Render the dedicated Network page |
 | `GET` | `/api/system/` | Retrieve current system data and recent CPU history |
 | `GET` | `/api/processes/` | Retrieve the complete current process list |
 | `GET` | `/api/memory/` | Retrieve current memory data, memory history and top memory processes |
 | `GET` | `/api/disk/` | Retrieve current disk data and read/write history |
+| `GET` | `/api/network/` | Retrieve throughput history, interfaces and current sockets |
 | `GET` | `/api/hardware/` | Retrieve cached static hardware identity and explanations |
 
-`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
+`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/`, `/api/network/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
 
-The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/`, `/memory/`, `/disk/` and `/docs/.../`. These return web pages rather than API data.
+The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/`, `/memory/`, `/disk/`, `/network/` and `/docs/.../`. These return web pages rather than API data.
 
 ---
 
@@ -2064,21 +2066,69 @@ Physical-drive model, SSD/NVMe type and health are **not duplicated** into this 
 
 ---
 
-# Possible `/api/network/`
+# `GET /api/network/`
 
-Could return information per network adapter:
+## Purpose
+
+Provides the dedicated Network page with a focused read-only view of the latest background telemetry:
+
+- current system-wide download/upload throughput
+- 60-sample throughput history
+- network interfaces with up/down state, link speed, MTU and addresses
+- per-interface download/upload rates
+- current IPv4/IPv6 TCP and UDP sockets
+- local and remote IP/port endpoints
+- TCP connection state
+- owning PID/process name where available
+- best-effort reverse-DNS hostname enrichment
+- summary counts for sockets, remote endpoints, established connections and listening sockets
+
+Example shape:
 
 ```json
 {
-    "interfaces": [
-        {
-            "name": "Wi-Fi",
-            "download_bytes_per_second": 3400000,
-            "upload_bytes_per_second": 180000
-        }
-    ]
+    "timestamp": "...",
+    "network": {
+        "download_bytes_per_second": 3481221.4,
+        "upload_bytes_per_second": 182310.7,
+        "summary": {
+            "total_sockets": 186,
+            "remote_connections": 48,
+            "established": 34,
+            "listening": 51,
+            "interfaces_up": 5
+        },
+        "interfaces": [
+            {
+                "name": "Ethernet",
+                "is_up": true,
+                "speed_mbps": 1000,
+                "mtu": 1500,
+                "download_bytes_per_second": 3481221.4,
+                "upload_bytes_per_second": 182310.7,
+                "addresses": []
+            }
+        ],
+        "connections": [
+            {
+                "pid": 17420,
+                "process_name": "chrome.exe",
+                "protocol": "TCP",
+                "family": "IPv4",
+                "local": {"ip": "192.168.1.20", "port": 53124},
+                "remote": {"ip": "142.250.x.x", "port": 443},
+                "hostname": null,
+                "status": "ESTABLISHED"
+            }
+        ]
+    },
+    "history": []
 }
 ```
+
+The API does **not** capture packets or HTTP/TLS payload contents. It represents current operating-system socket state. Reverse-DNS lookup is asynchronous and best-effort, so a hostname may be `null` on one response and appear on a later refresh.
+
+The rolling history stores only download/upload rates; the complete socket list belongs to the latest sample and is not duplicated across all 60 history entries.
 
 ---
 

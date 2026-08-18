@@ -498,7 +498,9 @@ sample
 │
 ├── network
 │   ├── download_bytes_per_second
-│   └── upload_bytes_per_second
+│   ├── upload_bytes_per_second
+│   ├── interfaces[]
+│   └── connections[]
 │
 └── processes
     ├── count
@@ -1186,7 +1188,7 @@ HardwareService
 The explanation layer derives generic educational text from detected properties instead of hard-coding a paragraph for every possible CPU, GPU, RAM or disk model.
 
 ---
-# Dedicated Memory and Disk Pages
+# Dedicated Memory, Disk and Network Pages
 
 The Memory and Disk pages are specialised views over the same background telemetry stream used by the overview dashboard. They do not own new samplers.
 
@@ -1203,14 +1205,19 @@ flowchart TD
     HISTORY --> MEMAPI
     LATEST --> DISKAPI["/api/disk/"]
     HISTORY --> DISKAPI
+    LATEST --> NETAPI["/api/network/"]
+    HISTORY --> NETAPI
 
     HW["HardwareService"] --> HWAPI["/api/hardware/"]
+    DNS["HostnameResolver"] --> NETAPI
 
     MEMAPI --> MEMPAGE["Memory page"]
     HWAPI --> MEMPAGE
 
     DISKAPI --> DISKPAGE["Disk page"]
     HWAPI --> DISKPAGE
+
+    NETAPI --> NETPAGE["Network page"]
 ```
 
 The Memory page combines:
@@ -1235,7 +1242,21 @@ system-wide read/write throughput history
 cached physical-drive identity / health
 ```
 
-This creates an important architectural distinction: **live resource behaviour** comes from `BackgroundMonitoringService`, while **what hardware is installed** comes from `HardwareService`.
+The Network page combines:
+
+```text
+live system upload/download rates
+        +
+per-interface counters, addresses and adapter state
+        +
+current TCP/UDP socket relationships
+        +
+best-effort reverse-DNS hostname enrichment
+```
+
+Connection objects are retained only in the latest sample; the rolling history stores network throughput rates rather than 60 copies of the socket table.
+
+This creates an important architectural distinction: **live resource behaviour** comes from `BackgroundMonitoringService`, **slow optional hostname metadata** comes from `HostnameResolver`, while **what hardware is installed** comes from `HardwareService`.
 
 ---
 
@@ -1829,6 +1850,8 @@ flowchart TD
         HSERVICE["HardwareService"]
         VIEW["Views"]
         API["/api/system/"]
+        NETAPI["/api/network/"]
+        DNS["HostnameResolver"]
     end
 
     subgraph Browser["Frontend"]
@@ -1864,8 +1887,11 @@ flowchart TD
 
     SERVICE --> VIEW
     VIEW --> API
+    VIEW --> NETAPI
+    DNS --> NETAPI
 
     API --> JS
+    NETAPI --> JS
     JS --> HTML
     JS --> CHART
 ```

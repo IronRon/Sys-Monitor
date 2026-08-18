@@ -1,0 +1,260 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Network | Sys Monitor</title>
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/network.css' %}">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+    <main class="network-page">
+
+        <header class="network-header">
+            <div>
+                <span class="page-eyebrow">
+                    SYS MONITOR
+                </span>
+
+                <h1>Network</h1>
+
+                <p>
+                    Traffic, interfaces and active connections
+                </p>
+            </div>
+
+            <nav class="main-nav">
+                <a href="/">Overview</a>
+                <a href="/processes/">Processes</a>
+                <a href="/hardware/">Hardware</a>
+                <a href="/memory/">Memory</a>
+                <a href="/disk/">Disk</a>
+
+                <a href="/network/" class="active">
+                    Network
+                </a>
+
+                <a href="/docs/">Docs</a>
+            </nav>
+        </header>
+
+
+        <section class="network-overview">
+
+            <article class="network-stat download">
+                <span>DOWNLOAD</span>
+                <strong id="network-download">--</strong>
+                <small>Incoming traffic</small>
+            </article>
+
+            <article class="network-stat upload">
+                <span>UPLOAD</span>
+                <strong id="network-upload">--</strong>
+                <small>Outgoing traffic</small>
+            </article>
+
+            <article class="network-stat">
+                <span>ESTABLISHED</span>
+                <strong id="network-established">--</strong>
+                <small>Connected TCP sockets</small>
+            </article>
+
+            <article class="network-stat">
+                <span>REMOTE</span>
+                <strong id="network-remote">--</strong>
+                <small>Sockets with a remote endpoint</small>
+            </article>
+
+        </section>
+
+
+        <section class="network-card">
+
+            <div class="card-heading">
+                <div>
+                    <span class="section-label">
+                        LIVE TRAFFIC
+                    </span>
+
+                    <h2>
+                        Download / Upload
+                    </h2>
+                </div>
+
+                <span id="network-sample-count">
+                    0 / 60 samples
+                </span>
+            </div>
+
+            <div class="network-chart-container">
+                <canvas id="network-chart"></canvas>
+            </div>
+
+        </section>
+
+
+        <section class="network-card">
+
+            <div class="card-heading">
+                <div>
+                    <span class="section-label">
+                        NETWORK INTERFACES
+                    </span>
+
+                    <h2>
+                        Adapters
+                    </h2>
+                </div>
+            </div>
+
+            <div id="interface-grid" class="interface-grid">
+            </div>
+
+        </section>
+
+
+        <section class="network-card">
+
+            <div class="connection-heading">
+
+                <div>
+                    <span class="section-label">
+                        SOCKETS
+                    </span>
+
+                    <h2>
+                        Active Connections
+                    </h2>
+                </div>
+
+
+                <div class="connection-controls">
+
+                    <input id="connection-search" type="search" placeholder="Process, IP, hostname, port...">
+
+                    <select id="protocol-filter">
+                        <option value="ALL">
+                            All protocols
+                        </option>
+                        <option value="TCP">
+                            TCP
+                        </option>
+                        <option value="UDP">
+                            UDP
+                        </option>
+                    </select>
+
+                    <label>
+                        <input id="remote-only" type="checkbox">
+
+                        Remote only
+                    </label>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-wrapper">
+
+                <table class="connection-table">
+
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>Protocol</th>
+                            <th>Local</th>
+                            <th>Remote</th>
+                            <th>Hostname</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="connection-body">
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <section class="network-learning">
+
+            <article>
+                <span>01</span>
+                <h3>IP Address</h3>
+                <p>
+                    An IP address identifies a network endpoint.
+                    IPv4 and IPv6 are two versions of the Internet
+                    Protocol.
+                </p>
+            </article>
+
+            <article>
+                <span>02</span>
+                <h3>Port</h3>
+                <p>
+                    A port identifies a particular network service
+                    or socket endpoint on a machine.
+                </p>
+            </article>
+
+            <article>
+                <span>03</span>
+                <h3>TCP</h3>
+                <p>
+                    TCP creates a reliable, ordered connection
+                    between endpoints and has states such as
+                    LISTEN and ESTABLISHED.
+                </p>
+            </article>
+
+            <article>
+                <span>04</span>
+                <h3>UDP</h3>
+                <p>
+                    UDP sends independent datagrams and does not
+                    establish a TCP-style connection first.
+                </p>
+            </article>
+
+            <article>
+                <span>05</span>
+                <h3>DNS</h3>
+                <p>
+                    DNS translates names into IP addresses.
+                    Reverse DNS attempts the opposite direction:
+                    IP address to hostname.
+                </p>
+            </article>
+
+        </section>
+
+
+        <footer class="network-footer">
+            <span id="network-last-updated">
+                Waiting for first sample...
+            </span>
+        </footer>
+
+    </main>
+
+
+    <script src="{% static 'dashboard/js/network.js' %}"></script>
+
+</body>
+
+</html>

@@ -817,26 +817,21 @@ Read 4.31 MB/s • Write 1.25 MB/s
 
 # Network Display
 
-The network card uses:
+The overview network card uses:
 
 ```javascript
 data.network.download_bytes_per_second
-```
-
-and:
-
-```javascript
 data.network.upload_bytes_per_second
 ```
 
-to display:
+to display current system-wide throughput such as:
 
 ```text
 ↓ 3.42 MB/s
 ↑ 0.18 MB/s
 ```
 
-The arrows provide a simple visual distinction between incoming and outgoing traffic.
+The dedicated Network page expands this into interface, socket and connection visualisations described later in this document.
 
 ---
 
@@ -1559,16 +1554,57 @@ flowchart LR
 This page deliberately presents **capacity** and **activity** as separate concepts. A filesystem can be 90% full while the drive is currently doing almost no I/O, or a mostly empty drive can be reading/writing heavily.
 
 ---
+# Dedicated Network Page
+
+The `/network/` page uses `network.html`, `network.css` and `network.js`. It requests `/api/network/` approximately once per second and presents both traffic history and the current operating-system socket view.
+
+The page renders:
+
+- current system-wide download/upload rates
+- a 60-second Chart.js traffic graph
+- interface cards with up/down state, link speed and MTU
+- IPv4, IPv6 and MAC addresses
+- per-interface upload/download rates
+- a live TCP/UDP socket table
+- process/PID, local endpoint, remote endpoint and connection status
+- reverse-DNS hostname enrichment when available
+- search, protocol filtering and a remote-only filter
+- educational cards for IP addresses, ports, TCP, UDP and DNS
+
+```mermaid
+flowchart TD
+    API["/api/network/"] --> JS["network.js"]
+    JS --> CHART["60-second throughput chart"]
+    JS --> IFACE["Interface cards"]
+    JS --> TABLE["Connection table"]
+
+    TABLE --> FILTER["Search / protocol / remote filters"]
+```
+
+The connection table displays **sockets**, not HTTP requests. An `ESTABLISHED` row such as:
+
+```text
+chrome.exe → remote-ip:443
+```
+
+shows that the Chrome process owns a connected TCP socket; it does not reveal the individual encrypted HTTPS request or response body.
+
+Reverse-DNS names are treated as optional enrichment. The table remains useful with the raw IP address even when a hostname is unresolved.
+
+---
+
 # Current Limitations
 
 The frontend is intentionally still simple.
 
 Current limitations include:
 
-* CPU, memory and disk have short live history graphs, but no persistent long-term history
+* CPU, memory, disk and network have short live history graphs, but no persistent long-term history
 * process details are currently limited to name, PID, PPID, CPU and memory
 * memory does not yet expose Windows-specific cache/standby, pool or page-fault counters
 * disk does not yet attribute live I/O to individual processes or physical devices
+* network inspection is socket-level only; no packet/payload capture yet
+* network throughput is not yet attributed directly to each process
 * no user-selectable refresh rate
 * no persistent chart history
 * Chart.js currently loads from an external CDN
@@ -1579,13 +1615,13 @@ Current limitations include:
 
 # Planned Frontend Development
 
-Near-term frontend work can now focus on the dedicated Network page, self-monitoring overhead, historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
+Near-term frontend work can now focus on packet-inspection Network v2, self-monitoring overhead, historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
 
 ---
 
 # Current Frontend Architecture
 
-The project now has six main browser-facing areas: the overview dashboard, Processes page, Hardware / About My PC page, Memory page, Disk page and documentation site.
+The project now has seven main browser-facing areas: the overview dashboard, Processes page, Hardware / About My PC page, Memory page, Disk page, Network page and documentation site.
 
 ```mermaid
 flowchart TD
@@ -1665,6 +1701,23 @@ flowchart TD
         DHW --> DJS
         DTEMPLATE --> DUI
         DJS --> DUI
+    end
+
+    subgraph Network["Network Page"]
+        NTEMPLATE["network.html"]
+        NJS["network.js"]
+        NAPI["/api/network/"]
+        NCHART["Traffic History"]
+        NIFACE["Interface Cards"]
+        NSOCK["Socket Table"]
+
+        NAPI --> NJS
+        NTEMPLATE --> NCHART
+        NTEMPLATE --> NIFACE
+        NTEMPLATE --> NSOCK
+        NJS --> NCHART
+        NJS --> NIFACE
+        NJS --> NSOCK
     end
 
     subgraph Docs["Documentation Site"]

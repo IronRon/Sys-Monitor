@@ -1,0 +1,956 @@
+* {
+    box-sizing: border-box;
+}
+
+
+body {
+    margin: 0;
+
+    background:
+        radial-gradient(circle at 80% 0%,
+            rgba(45, 170, 255, 0.11),
+            transparent 34%),
+        radial-gradient(circle at 10% 20%,
+            rgba(35, 220, 220, 0.07),
+            transparent 30%),
+        #080c14;
+
+    color: #dce5f5;
+}
+
+
+/* --------------------------------------------------
+   Page
+-------------------------------------------------- */
+
+.network-page {
+    width:
+        min(1450px, calc(100% - 40px));
+
+    margin: 0 auto;
+
+    padding: 30px 0 60px;
+}
+
+
+.page-eyebrow,
+.section-label {
+    color: #4cc9ff;
+
+    font-size: 0.68rem;
+    font-weight: 800;
+
+    letter-spacing: 0.13em;
+}
+
+
+/* --------------------------------------------------
+   Header
+-------------------------------------------------- */
+
+.network-header {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 25px;
+
+    margin-bottom: 24px;
+}
+
+
+.network-header h1 {
+    margin: 4px 0;
+
+    color: #ffffff;
+
+    font-size: 2.6rem;
+}
+
+
+.network-header p {
+    margin: 0;
+
+    color: #8492a8;
+}
+
+
+/* --------------------------------------------------
+   Overview cards
+-------------------------------------------------- */
+
+.network-overview {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+
+    gap: 16px;
+
+    margin-bottom: 18px;
+}
+
+
+.network-stat {
+    position: relative;
+
+    overflow: hidden;
+
+    min-height: 155px;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    padding: 22px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.075);
+
+    border-radius: 18px;
+
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(65, 160, 255, 0.11),
+            transparent 55%),
+        rgba(15, 21, 34, 0.87);
+
+    box-shadow:
+        0 18px 45px rgba(0, 0, 0, 0.20);
+}
+
+
+.network-stat.download {
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(55, 175, 255, 0.17),
+            transparent 58%),
+        rgba(15, 21, 34, 0.87);
+}
+
+
+.network-stat.upload {
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(45, 220, 200, 0.13),
+            transparent 58%),
+        rgba(15, 21, 34, 0.87);
+}
+
+
+.network-stat>span {
+    color: #718099;
+
+    font-size: 0.69rem;
+    font-weight: 800;
+
+    letter-spacing: 0.10em;
+}
+
+
+.network-stat strong {
+    margin: 9px 0;
+
+    color: #ffffff;
+
+    font-size: 1.9rem;
+
+    font-variant-numeric:
+        tabular-nums;
+}
+
+
+.network-stat small {
+    color: #728199;
+}
+
+
+/* Small decorative glow */
+
+.network-stat::after {
+    content: "";
+
+    position: absolute;
+
+    width: 85px;
+    height: 85px;
+
+    right: -25px;
+    bottom: -30px;
+
+    border-radius: 50%;
+
+    background:
+        rgba(65, 190, 255, 0.07);
+
+    filter: blur(8px);
+}
+
+
+/* --------------------------------------------------
+   Shared cards
+-------------------------------------------------- */
+
+.network-card {
+    padding: 25px;
+
+    margin-top: 18px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.075);
+
+    border-radius: 18px;
+
+    background:
+        rgba(15, 21, 34, 0.87);
+
+    box-shadow:
+        0 18px 45px rgba(0, 0, 0, 0.20);
+}
+
+
+.card-heading,
+.connection-heading {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: start;
+
+    gap: 20px;
+
+    margin-bottom: 20px;
+}
+
+
+.card-heading h2,
+.connection-heading h2 {
+    margin: 6px 0 3px;
+
+    color: #ffffff;
+}
+
+
+.card-heading p,
+.connection-heading p,
+.card-heading>span {
+    margin: 0;
+
+    color: #74839a;
+
+    font-size: 0.77rem;
+}
+
+
+/* --------------------------------------------------
+   Chart
+-------------------------------------------------- */
+
+.network-chart-container {
+    height: 320px;
+}
+
+
+/* --------------------------------------------------
+   Interfaces
+-------------------------------------------------- */
+
+.interface-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 15px;
+}
+
+
+.interface-card {
+    position: relative;
+
+    overflow: hidden;
+
+    padding: 21px;
+
+    border:
+        1px solid rgba(55, 185, 255, 0.12);
+
+    border-radius: 15px;
+
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(40, 175, 255, 0.10),
+            transparent 43%),
+        rgba(255, 255, 255, 0.018);
+}
+
+
+.interface-card:hover {
+    border-color:
+        rgba(70, 200, 255, 0.25);
+
+    background:
+        radial-gradient(circle at 100% 0%,
+            rgba(40, 175, 255, 0.14),
+            transparent 43%),
+        rgba(255, 255, 255, 0.025);
+}
+
+
+.interface-top {
+    display: flex;
+
+    justify-content: space-between;
+    align-items: center;
+
+    gap: 16px;
+
+    margin-bottom: 18px;
+}
+
+
+.interface-top h3 {
+    margin: 0;
+
+    color: #ffffff;
+
+    font-size: 1.02rem;
+}
+
+
+.interface-state {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    padding: 5px 8px;
+
+    border-radius: 999px;
+
+    font-size: 0.66rem;
+    font-weight: 800;
+
+    letter-spacing: 0.08em;
+}
+
+
+.interface-state::before {
+    content: "";
+
+    width: 7px;
+    height: 7px;
+
+    border-radius: 50%;
+}
+
+
+.interface-state.up {
+    color: #69e8a5;
+
+    background:
+        rgba(60, 220, 135, 0.08);
+
+    border:
+        1px solid rgba(60, 220, 135, 0.15);
+}
+
+
+.interface-state.up::before {
+    background: #54e79b;
+
+    box-shadow:
+        0 0 10px rgba(84, 231, 155, 0.75);
+}
+
+
+.interface-state.down {
+    color: #e68c93;
+
+    background:
+        rgba(235, 85, 95, 0.07);
+
+    border:
+        1px solid rgba(235, 85, 95, 0.15);
+}
+
+
+.interface-state.down::before {
+    background: #e46c77;
+}
+
+
+.interface-stats {
+    display: grid;
+
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+
+    gap: 8px;
+
+    margin-bottom: 17px;
+}
+
+
+.interface-stats>span {
+    padding: 9px;
+
+    border-radius: 8px;
+
+    background:
+        rgba(255, 255, 255, 0.025);
+
+    color: #6f7d92;
+
+    font-size: 0.66rem;
+}
+
+
+.interface-stats strong {
+    display: block;
+
+    margin-top: 4px;
+
+    color: #c8d6e9;
+
+    font-size: 0.76rem;
+
+    font-weight: 600;
+
+    font-variant-numeric:
+        tabular-nums;
+}
+
+
+.interface-addresses {
+    display: grid;
+
+    gap: 7px;
+}
+
+
+.interface-addresses div {
+    display: grid;
+
+    grid-template-columns:
+        55px minmax(0, 1fr);
+
+    gap: 10px;
+
+    align-items: center;
+
+    padding: 7px 9px;
+
+    border-radius: 7px;
+
+    background:
+        rgba(0, 0, 0, 0.10);
+}
+
+
+.interface-addresses span {
+    color: #60748e;
+
+    font-size: 0.65rem;
+
+    font-weight: 700;
+}
+
+
+.interface-addresses strong {
+    overflow-wrap: anywhere;
+
+    color: #abc5e0;
+
+    font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+
+    font-size: 0.72rem;
+
+    font-weight: 500;
+}
+
+
+/* --------------------------------------------------
+   Connection controls
+-------------------------------------------------- */
+
+.connection-heading {
+    align-items: center;
+}
+
+
+.connection-controls {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    justify-content: flex-end;
+    align-items: center;
+
+    gap: 9px;
+}
+
+
+.connection-controls input[type="search"],
+.connection-controls select {
+    height: 38px;
+
+    padding: 0 11px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.09);
+
+    border-radius: 8px;
+
+    outline: none;
+
+    background:
+        rgba(8, 13, 22, 0.85);
+
+    color: #d8e3f3;
+}
+
+
+.connection-controls input[type="search"] {
+    width: 250px;
+}
+
+
+.connection-controls input[type="search"]::placeholder {
+    color: #596981;
+}
+
+
+.connection-controls input[type="search"]:focus,
+.connection-controls select:focus {
+    border-color:
+        rgba(65, 190, 255, 0.45);
+
+    box-shadow:
+        0 0 0 3px rgba(55, 180, 255, 0.06);
+}
+
+
+.connection-controls label {
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    height: 38px;
+
+    padding: 0 11px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.07);
+
+    border-radius: 8px;
+
+    background:
+        rgba(255, 255, 255, 0.02);
+
+    color: #78889f;
+
+    font-size: 0.73rem;
+
+    cursor: pointer;
+}
+
+
+.connection-controls input[type="checkbox"] {
+    accent-color: #41c7ff;
+}
+
+
+/* --------------------------------------------------
+   Connection table
+-------------------------------------------------- */
+
+.table-wrapper {
+    width: 100%;
+
+    overflow-x: auto;
+}
+
+
+.connection-table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    min-width: 1050px;
+}
+
+
+.connection-table th,
+.connection-table td {
+    padding: 12px 10px;
+
+    border-bottom:
+        1px solid rgba(255, 255, 255, 0.05);
+
+    text-align: left;
+
+    vertical-align: middle;
+}
+
+
+.connection-table th {
+    position: sticky;
+
+    top: 0;
+
+    z-index: 2;
+
+    background:
+        rgba(15, 21, 34, 0.98);
+
+    color: #65758d;
+
+    font-size: 0.66rem;
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: 0.08em;
+}
+
+
+.connection-table td {
+    color: #a7b4c7;
+
+    font-size: 0.78rem;
+}
+
+
+.connection-table tbody tr {
+    transition:
+        background 0.16s ease;
+}
+
+
+.connection-table tbody tr:hover {
+    background:
+        rgba(50, 180, 255, 0.035);
+}
+
+
+.connection-table td:first-child strong {
+    display: block;
+
+    color: #ebf3ff;
+
+    font-size: 0.8rem;
+}
+
+
+.connection-table td small {
+    display: block;
+
+    margin-top: 3px;
+
+    color: #65748b;
+
+    font-size: 0.65rem;
+}
+
+
+/* Local / Remote endpoint */
+
+.endpoint {
+    color: #8fc8ec !important;
+
+    font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+
+    font-size: 0.72rem !important;
+
+    white-space: nowrap;
+}
+
+
+/* --------------------------------------------------
+   Status chips
+-------------------------------------------------- */
+
+.status-chip {
+    display: inline-flex;
+
+    align-items: center;
+
+    padding: 5px 8px;
+
+    border-radius: 999px;
+
+    background:
+        rgba(255, 255, 255, 0.045);
+
+    color: #91a1b8;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.06);
+
+    font-size: 0.64rem;
+    font-weight: 700;
+
+    letter-spacing: 0.04em;
+}
+
+
+/* TCP ESTABLISHED */
+
+.status-established {
+    color: #64eaa5;
+
+    background:
+        rgba(60, 220, 135, 0.07);
+
+    border-color:
+        rgba(60, 220, 135, 0.14);
+}
+
+
+/* Listening socket */
+
+.status-listen {
+    color: #64cfff;
+
+    background:
+        rgba(50, 180, 255, 0.07);
+
+    border-color:
+        rgba(50, 180, 255, 0.14);
+}
+
+
+/* Connections being opened */
+
+.status-syn_sent,
+.status-syn_recv {
+    color: #e6c46f;
+
+    background:
+        rgba(230, 190, 80, 0.06);
+
+    border-color:
+        rgba(230, 190, 80, 0.13);
+}
+
+
+/* Closing / waiting states */
+
+.status-time_wait,
+.status-close_wait,
+.status-fin_wait1,
+.status-fin_wait2,
+.status-closing,
+.status-last_ack {
+    color: #d7a56e;
+
+    background:
+        rgba(215, 150, 70, 0.055);
+
+    border-color:
+        rgba(215, 150, 70, 0.12);
+}
+
+
+/* UDP / no state */
+
+.status-none {
+    color: #9990c8;
+
+    background:
+        rgba(145, 115, 210, 0.06);
+
+    border-color:
+        rgba(145, 115, 210, 0.13);
+}
+
+
+/* --------------------------------------------------
+   Learning cards
+-------------------------------------------------- */
+
+.network-learning {
+    display: grid;
+
+    grid-template-columns:
+        repeat(5, minmax(0, 1fr));
+
+    gap: 14px;
+
+    margin-top: 18px;
+}
+
+
+.network-learning article {
+    padding: 20px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.06);
+
+    border-radius: 15px;
+
+    background:
+        rgba(15, 21, 34, 0.84);
+}
+
+
+.network-learning article>span {
+    color: #328fbb;
+
+    font-size: 0.68rem;
+    font-weight: 800;
+}
+
+
+.network-learning h3 {
+    margin: 9px 0;
+
+    color: #ffffff;
+
+    font-size: 1rem;
+}
+
+
+.network-learning p {
+    margin: 0;
+
+    color: #7e8ca3;
+
+    font-size: 0.77rem;
+
+    line-height: 1.6;
+}
+
+
+/* --------------------------------------------------
+   Footer
+-------------------------------------------------- */
+
+.network-footer {
+    margin-top: 20px;
+
+    color: #68768b;
+
+    font-size: 0.74rem;
+
+    text-align: right;
+}
+
+
+/* --------------------------------------------------
+   Responsive
+-------------------------------------------------- */
+
+@media (max-width: 1200px) {
+
+    .network-overview {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+
+    .network-learning {
+        grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+    }
+
+
+    .interface-stats {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+}
+
+
+@media (max-width: 950px) {
+
+    .interface-grid {
+        grid-template-columns: 1fr;
+    }
+
+
+    .connection-heading {
+        flex-direction: column;
+
+        align-items: stretch;
+    }
+
+
+    .connection-controls {
+        justify-content: flex-start;
+    }
+
+
+    .network-learning {
+        grid-template-columns:
+            repeat(2, minmax(0, 1fr));
+    }
+
+}
+
+
+@media (max-width: 750px) {
+
+    .network-header {
+        flex-direction: column;
+
+        align-items: flex-start;
+    }
+
+
+    .network-overview,
+    .network-learning {
+        grid-template-columns: 1fr;
+    }
+
+
+    .connection-controls {
+        flex-direction: column;
+
+        align-items: stretch;
+    }
+
+
+    .connection-controls input[type="search"] {
+        width: 100%;
+    }
+
+
+    .interface-stats {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+
+@media (max-width: 520px) {
+
+    .network-page {
+        width:
+            min(100% - 24px, 1450px);
+    }
+
+
+    .network-card,
+    .network-stat {
+        padding: 19px;
+    }
+
+
+    .interface-addresses div {
+        grid-template-columns: 1fr;
+    }
+
+}
