@@ -391,6 +391,137 @@ class BackgroundMonitoringService:
         }
 
 
+    def get_memory_data(self):
+        """
+        Data used by /api/memory/.
+
+        No new system collection happens here.
+        We only read the latest background sample.
+        """
+
+        sample, history = (
+            self._get_snapshot()
+        )
+
+
+        processes = (
+            sample["processes"]["items"]
+        )
+
+
+        top_memory = sorted(
+            processes,
+            key=lambda process:
+                process.get(
+                    "memory_bytes"
+                ) or 0,
+            reverse=True,
+        )[:10]
+
+
+        return {
+            "timestamp":
+                sample["timestamp"]
+                .isoformat(),
+
+            "memory":
+                sample["memory"],
+
+
+            "top_processes":
+                top_memory,
+
+
+            "history": [
+                {
+                    "timestamp":
+                        item["timestamp"]
+                        .isoformat(),
+
+                    "percent":
+                        item["memory"][
+                            "percent"
+                        ],
+
+                    "in_use_bytes":
+                        item["memory"][
+                            "in_use_bytes"
+                        ],
+
+                    "available_bytes":
+                        item["memory"][
+                            "available_bytes"
+                        ],
+
+                    "pagefile_percent":
+                        item["memory"][
+                            "pagefile"
+                        ]["percent"],
+                }
+
+                for item in history
+            ],
+        }
+
+
+    def get_disk_data(self):
+        """
+        Data used by /api/disk/.
+
+        This does not collect new disk information.
+        It reads the latest background sample.
+        """
+
+        sample, history = (
+            self._get_snapshot()
+        )
+
+
+        return {
+            "timestamp":
+                sample["timestamp"]
+                .isoformat(),
+
+            "disk":
+                sample["disk"],
+
+            "history": [
+                {
+                    "timestamp":
+                        item["timestamp"]
+                        .isoformat(),
+
+                    "percent":
+                        item["disk"][
+                            "percent"
+                        ],
+
+                    "used_bytes":
+                        item["disk"][
+                            "used_bytes"
+                        ],
+
+                    "free_bytes":
+                        item["disk"][
+                            "free_bytes"
+                        ],
+
+                    "read_bytes_per_second":
+                        item["disk"][
+                            "read_bytes_per_second"
+                        ],
+
+                    "write_bytes_per_second":
+                        item["disk"][
+                            "write_bytes_per_second"
+                        ],
+                }
+
+                for item in history
+            ],
+        }
+
+
 monitoring_service = BackgroundMonitoringService(
     sample_interval=1.0,
     history_size=60,

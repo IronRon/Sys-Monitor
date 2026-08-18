@@ -151,18 +151,24 @@ Sys_Monitor/
     │   │   └── dashboard/
     │   │       ├── index.html
     │   │       ├── processes.html
-    │   │       └── hardware.html
+    │   │       ├── hardware.html
+    │   │       ├── memory.html
+    │   │       └── disk.html
     │   │
     │   └── static/
     │       └── dashboard/
     │           ├── css/
     │           │   ├── dashboard.css
     │           │   ├── processes.css
-    │           │   └── hardware.css
+    │           │   ├── hardware.css
+    │           │   ├── memory.css
+    │           │   └── disk.css
     │           └── js/
     │               ├── dashboard.js
     │               ├── processes.js
-    │               └── hardware.js
+    │               ├── hardware.js
+    │               ├── memory.js
+    │               └── disk.js
     │
     ├── config/
     │   ├── settings.py
@@ -1180,6 +1186,59 @@ HardwareService
 The explanation layer derives generic educational text from detected properties instead of hard-coding a paragraph for every possible CPU, GPU, RAM or disk model.
 
 ---
+# Dedicated Memory and Disk Pages
+
+The Memory and Disk pages are specialised views over the same background telemetry stream used by the overview dashboard. They do not own new samplers.
+
+```mermaid
+flowchart TD
+    BG["BackgroundMonitoringService"]
+    LATEST["latest_sample"]
+    HISTORY["MonitorHistory"]
+
+    BG --> LATEST
+    BG --> HISTORY
+
+    LATEST --> MEMAPI["/api/memory/"]
+    HISTORY --> MEMAPI
+    LATEST --> DISKAPI["/api/disk/"]
+    HISTORY --> DISKAPI
+
+    HW["HardwareService"] --> HWAPI["/api/hardware/"]
+
+    MEMAPI --> MEMPAGE["Memory page"]
+    HWAPI --> MEMPAGE
+
+    DISKAPI --> DISKPAGE["Disk page"]
+    HWAPI --> DISKPAGE
+```
+
+The Memory page combines:
+
+```text
+live physical-memory + page-file telemetry
+        +
+60-sample memory history
+        +
+top memory processes
+        +
+cached physical DIMM information
+```
+
+The Disk page combines:
+
+```text
+live C: filesystem capacity
+        +
+system-wide read/write throughput history
+        +
+cached physical-drive identity / health
+```
+
+This creates an important architectural distinction: **live resource behaviour** comes from `BackgroundMonitoringService`, while **what hardware is installed** comes from `HardwareService`.
+
+---
+
 # Browser Architecture
 
 The browser contains three main frontend technologies:

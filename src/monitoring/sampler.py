@@ -89,10 +89,46 @@ class SystemSampler:
             },
 
             "memory": {
-                "percent": memory["percent"],
-                "total_bytes": memory["total"],
-                "used_bytes": memory["used"],
-                "available_bytes": memory["available"],
+                "percent":
+                    memory["percent"],
+
+                "total_bytes":
+                    memory["total"],
+
+                "used_bytes":
+                    memory["used"],
+
+                "available_bytes":
+                    memory["available"],
+
+                "free_bytes":
+                    memory["free"],
+
+
+                # This intentionally matches the
+                # percentage calculation based on
+                # total - available.
+                "in_use_bytes":
+                    max(
+                        memory["total"]
+                        - memory["available"],
+                        0,
+                    ),
+
+
+                "pagefile": {
+                    "total_bytes":
+                        memory["pagefile"]["total"],
+
+                    "used_bytes":
+                        memory["pagefile"]["used"],
+
+                    "free_bytes":
+                        memory["pagefile"]["free"],
+
+                    "percent":
+                        memory["pagefile"]["percent"],
+                },
             },
 
             "disk": {

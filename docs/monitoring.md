@@ -870,7 +870,14 @@ A simplified sample looks like:
         "percent": ...,
         "total_bytes": ...,
         "used_bytes": ...,
-        "available_bytes": ...
+        "available_bytes": ...,
+        "in_use_bytes": ...,
+        "pagefile": {
+            "total_bytes": ...,
+            "used_bytes": ...,
+            "free_bytes": ...,
+            "percent": ...
+        }
     },
 
     "disk": {
@@ -1994,6 +2001,40 @@ Each layer performs a different transformation.
 ---
 
 
+# Dedicated Memory and Disk Views
+
+The background sampler now supports dedicated resource pages without creating additional collection loops. `BackgroundMonitoringService` exposes:
+
+```text
+/api/memory/
+/api/disk/
+```
+
+Both endpoints read the same latest sample and rolling history already maintained for the rest of the application.
+
+```mermaid
+flowchart TD
+    BG["Background sampler"] --> SAMPLE["Latest system sample"]
+    BG --> HISTORY["60-sample history"]
+
+    SAMPLE --> MEMAPI["/api/memory/"]
+    HISTORY --> MEMAPI
+
+    SAMPLE --> DISKAPI["/api/disk/"]
+    HISTORY --> DISKAPI
+
+    MEMAPI --> MEMPAGE["Memory page"]
+    DISKAPI --> DISKPAGE["Disk page"]
+```
+
+The Memory endpoint returns the current memory snapshot, memory history and a Top Memory process ranking derived from the **already collected complete process list**. It does not call `psutil.process_iter()` again.
+
+The Disk endpoint exposes the current capacity/read/write values and a 60-sample history of read/write throughput. It likewise performs no additional disk collection.
+
+The Memory and Disk pages also make one separate request to `/api/hardware/` for slow-changing DIMM and physical-drive information. This keeps live telemetry and static hardware identity separate.
+
+---
+
 # Static Hardware Data Is Kept Separate
 
 The live monitoring layer is designed for values that change continuously, such as CPU usage, RAM usage, disk throughput and processes. Hardware identity is handled separately.
@@ -2028,6 +2069,8 @@ Current limitations include:
 * history is stored only in memory
 * only 60 recent samples are retained
 * samples disappear when the application stops
+* memory history is high-level and does not yet include Windows standby/cache, pool or page-fault counters
+* disk throughput history is system-wide rather than attributed to individual processes or physical devices
 * no database persistence
 * no configurable sampling interval through the UI
 * no long-term aggregation

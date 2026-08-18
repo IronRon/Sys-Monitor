@@ -483,8 +483,17 @@ Current returned structure:
     "total": 34273824768,
     "available": 17828139008,
     "used": 16445685760,
+    "free": 17828139008,
+    "pagefile": {
+        "total": ...,
+        "used": ...,
+        "free": ...,
+        "percent": ...
+    }
 }
 ```
+
+Physical-memory information comes from `psutil.virtual_memory()`. Page-file information is collected separately with `psutil.swap_memory()` and then stored in the same memory result for the dedicated Memory page.
 
 Values representing quantities of memory are kept in **bytes**.
 
@@ -616,7 +625,23 @@ Example:
 47.9%
 ```
 
-This is the value currently shown by the dashboard's memory card.
+This is used by both the overview dashboard and the dedicated Memory page. The Memory page also calculates an explicit `in_use_bytes = total - available` value so its main breakdown matches the available-memory model used for the percentage.
+
+---
+
+# Page File
+
+The memory collector also calls:
+
+```python
+psutil.swap_memory()
+```
+
+and records page-file capacity, used space, free space and percentage. On Windows, this is useful for showing how much page-file-backed capacity is currently in use.
+
+The page file should not simply be thought of as "extra RAM". It participates in Windows virtual-memory and committed-memory management, while physical RAM remains much faster storage for actively used pages.
+
+The dedicated Memory page displays this information separately from physical-memory utilisation.
 
 ---
 
@@ -767,9 +792,21 @@ free
 percent
 ```
 
-Current monitoring is limited to the Windows `C:` drive.
+Current live capacity monitoring is limited to the Windows `C:` drive.
 
-Future versions may enumerate all disks and partitions.
+The dedicated Disk page combines this live filesystem view with **physical-drive identity** from the static hardware collector. This is why the page can show both C: capacity and information such as an SSD's model, NVMe bus type, physical capacity and health.
+
+These are deliberately treated as different concepts:
+
+```text
+filesystem / volume
+    → used and free capacity
+
+physical drive
+    → actual storage hardware
+```
+
+Future versions may enumerate all volumes and calculate live activity per physical device.
 
 ---
 
@@ -1696,15 +1733,15 @@ Current limitations include:
 
 ## Memory
 
-* no pagefile display
-* no detailed cached-memory information
-* no paging-rate monitoring
-* no per-memory-category visualisation
+* page-file capacity/usage is displayed, but no detailed Windows standby/cache breakdown
+* no committed-memory or paged/non-paged pool breakdown
+* no page-fault or paging-rate monitoring
+* no per-memory-category visualisation beyond in-use/available
 
 ## Disk
 
-* only the C: filesystem is shown for capacity
-* no per-drive dashboard
+* live capacity still focuses on the C: filesystem
+* physical-drive identity is available, but live throughput is not yet separated per drive
 * no queue depth
 * no latency
 * no response-time monitoring

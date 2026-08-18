@@ -35,4 +35,28 @@ urlpatterns = [
         views.hardware_api,
         name="hardware-api",
     ),
+
+    path(
+        "memory/",
+        views.memory_page,
+        name="memory",
+    ),
+
+    path(
+        "api/memory/",
+        views.memory_api,
+        name="memory-api",
+    ),
+
+    path(
+        "disk/",
+        views.disk_page,
+        name="disk",
+    ),
+
+    path(
+        "api/disk/",
+        views.disk_api,
+        name="disk-api",
+    ),
 ]

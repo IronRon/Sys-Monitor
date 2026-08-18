@@ -40,6 +40,7 @@ python -m src.monitor
 - Physical and logical CPU counts
 - RAM usage
 - Total, used and available memory
+- Page-file usage
 - Disk capacity usage
 - Disk read throughput
 - Disk write throughput
@@ -90,7 +91,9 @@ The project currently provides:
 2. A Django overview dashboard
 3. A dedicated Django Processes page
 4. A Django **About My PC / Hardware** page
-5. A Django documentation area
+5. A dedicated Django Memory page
+6. A dedicated Django Disk page
+7. A Django documentation area
 
 The web dashboard currently displays:
 
@@ -117,6 +120,10 @@ The dedicated Processes page provides:
 - CPU-coloured, memory-sized process nodes with parent/child edges
 
 The Hardware page under `/hardware/` displays static PC specifications discovered from Windows and explains concepts such as physical/logical cores, CPU cache, RAM module speeds, SSD/NVMe storage and system architecture.
+
+The dedicated Memory page under `/memory/` combines the shared live sample stream with cached RAM hardware information. It displays physical-memory utilisation, in-use and available memory, page-file usage, a 60-second memory history graph, top memory-consuming processes and the installed RAM modules. It also explains concepts such as available memory, working sets, caching and paging.
+
+The dedicated Disk page under `/disk/` displays C: filesystem capacity, current read/write throughput, a 60-second I/O history graph and cached physical-drive information such as SSD/NVMe type, capacity and health. It deliberately distinguishes **storage capacity** from **disk activity**, and **filesystem volumes** from **physical drives**.
 
 The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 
@@ -202,9 +209,12 @@ Windows
    │                              ▼
    │                 BackgroundMonitoringService
    │                              │
-   │                    ┌─────────┴─────────┐
-   │                    ▼                   ▼
-   │              /api/system/       /api/processes/
+   │         ┌──────────┼──────────┬──────────┐
+   │         ▼          ▼          ▼          ▼
+   │   /api/system/ /api/processes/ /api/memory/ /api/disk/
+   │         │          │          │          │
+   │         ▼          ▼          ▼          ▼
+   │      Overview   Processes   Memory      Disk
    │
    └── PowerShell / CIM ─────── static hardware collector
                                   │
@@ -266,7 +276,9 @@ Collects:
 - total physical memory
 - used memory
 - available memory
+- free memory
 - memory utilisation percentage
+- page-file total, used, free and utilisation percentage
 
 ## Disk
 
@@ -471,19 +483,19 @@ Ctrl + C
 
 Django provides the web interface.
 
-The current dashboard has two important routes:
+The current web application exposes several HTML pages and JSON APIs. Important live-resource routes include:
 
 ```text
-/
+/                 → overview dashboard
+/memory/           → dedicated Memory page
+/disk/             → dedicated Disk page
+
+/api/system/       → overview monitoring JSON
+/api/memory/       → memory snapshot + memory history
+/api/disk/         → disk snapshot + disk history
 ```
 
-Displays the graphical dashboard.
-
-```text
-/api/system/
-```
-
-Returns monitoring data as JSON.
+The dedicated resource APIs do **not** start their own collectors. They read views of the same latest sample and rolling history owned by `BackgroundMonitoringService`.
 
 The data flow is:
 
@@ -528,7 +540,7 @@ It now owns the live web-monitoring lifecycle. It contains:
 - a background sampling thread
 - thread-safe events and locking
 
-The background thread samples the PC approximately once per second even when no browser tab is open. `/api/system/` and `/api/processes/` no longer trigger their own collection passes; they read different views of the same latest sample.
+The background thread samples the PC approximately once per second even when no browser tab is open. `/api/system/`, `/api/processes/`, `/api/memory/` and `/api/disk/` no longer trigger their own collection passes; they read different views of the same latest sample and rolling history.
 
 The service keeps the complete process list only in the latest sample, while rolling history stores smaller historical snapshots so that hundreds of process objects are not duplicated 60 times.
 
@@ -668,10 +680,11 @@ Current limitations include:
 - no persistent database history
 - no authentication
 - no process management actions
-- no GPU monitoring
-- only basic disk information
+- no GPU performance monitoring
+- disk capacity is currently centred on the C: filesystem while physical-drive identity comes from the hardware service
+- no per-process or per-device live disk I/O breakdown yet
 - only basic network information
-- the dashboard currently has only one historical graph
+- no persistent historical graphs beyond the in-memory 60-sample window
 - Chart.js is currently loaded externally
 
 These limitations are expected to change as the project develops.
@@ -682,9 +695,10 @@ These limitations are expected to change as the project develops.
 
 Near-term development:
 
-- More performance graphs
+- dedicated Network page and connection inspection
 - richer process details and diagnostics
 - navigation/layout cleanup as more pages are added
+- self-monitoring overhead and historical analytics
 
 Possible later additions:
 
@@ -717,8 +731,11 @@ Topics covered or planned include:
 - parent/child process relationships
 - CPU cores and logical processors
 - CPU scheduling
-- memory and working sets
+- memory, working sets, available memory and paging
+- page files and committed-memory concepts
 - disk I/O
+- filesystem capacity vs disk activity
+- filesystems/volumes vs physical drives
 - network I/O
 - cumulative counters
 - sampling

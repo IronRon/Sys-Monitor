@@ -16,13 +16,7 @@ Browser / other clients
 
 The current API is intentionally small.
 
-At present, the main monitoring endpoint is:
-
-```text
-GET /api/system/
-```
-
-It returns the latest system measurements together with the recent CPU history used by the dashboard.
+The API now exposes a small set of specialised read-only endpoints over the same background monitoring state. `/api/system/` provides the overview payload, while `/api/processes/`, `/api/memory/` and `/api/disk/` provide focused views for their dedicated pages. Static hardware identity is exposed separately by `/api/hardware/`.
 
 ---
 
@@ -35,13 +29,17 @@ Current routes:
 | `GET` | `/` | Render the overview dashboard |
 | `GET` | `/processes/` | Render the dedicated Processes page |
 | `GET` | `/hardware/` | Render the About My PC / Hardware page |
+| `GET` | `/memory/` | Render the dedicated Memory page |
+| `GET` | `/disk/` | Render the dedicated Disk page |
 | `GET` | `/api/system/` | Retrieve current system data and recent CPU history |
 | `GET` | `/api/processes/` | Retrieve the complete current process list |
+| `GET` | `/api/memory/` | Retrieve current memory data, memory history and top memory processes |
+| `GET` | `/api/disk/` | Retrieve current disk data and read/write history |
 | `GET` | `/api/hardware/` | Retrieve cached static hardware identity and explanations |
 
-`/api/system/`, `/api/processes/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
+`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
 
-The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/` and `/docs/.../`. These return web pages rather than API data.
+The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/`, `/memory/`, `/disk/` and `/docs/.../`. These return web pages rather than API data.
 
 ---
 
@@ -776,6 +774,27 @@ bytes
 ```
 
 Represents memory estimated to be available for applications.
+
+---
+
+# Dedicated Memory Fields
+
+The dedicated Memory page uses additional values now stored in each live memory sample:
+
+```json
+{
+    "in_use_bytes": 16500000000,
+    "free_bytes": 17700000000,
+    "pagefile": {
+        "total_bytes": 6000000000,
+        "used_bytes": 1000000000,
+        "free_bytes": 5000000000,
+        "percent": 16.7
+    }
+}
+```
+
+`in_use_bytes` is calculated as `total_bytes - available_bytes` so the Memory page's main visual breakdown matches the availability-based utilisation model. Page-file data is shown separately from physical RAM.
 
 ---
 
@@ -1938,7 +1957,7 @@ This Markdown document acts as the current human-readable API specification.
 
 As the dashboard becomes more advanced, splitting system information into specialised endpoints may become useful.
 
-Potential future API structure:
+Current and possible future API structure:
 
 ```text
 /api/
@@ -1946,11 +1965,11 @@ Potential future API structure:
 ├── system/        # current
 ├── processes/     # current
 ├── hardware/      # current
-├── cpu/            # possible future
-├── memory/         # possible future
-├── disk/           # possible future
-├── network/        # possible future
-└── history/        # possible future
+├── memory/        # current
+├── disk/          # current
+├── cpu/           # possible future
+├── network/       # possible future
+└── history/       # possible future
 ```
 
 ---
@@ -1979,48 +1998,69 @@ Useful for:
 
 ---
 
-# Possible `/api/memory/`
+# `GET /api/memory/`
 
-Could expose more detailed memory statistics:
+## Purpose
+
+Provides the dedicated Memory page with a focused view of already-collected background telemetry. It includes:
+
+- current physical-memory values
+- page-file values
+- top memory-consuming processes
+- the recent 60-sample memory history
+
+Example shape:
 
 ```json
 {
-    "percent": 48.1,
-    "total_bytes": 34273824768,
-    "used_bytes": 16445685760,
-    "available_bytes": 17828139008
+    "timestamp": "...",
+    "memory": {
+        "percent": 48.1,
+        "total_bytes": 34273824768,
+        "available_bytes": 17828139008,
+        "in_use_bytes": 16445685760,
+        "pagefile": {
+            "percent": 16.7
+        }
+    },
+    "top_processes": [],
+    "history": []
 }
 ```
 
-Later it could include:
-
-* cached memory
-* committed memory
-* swap/pagefile information
-* paging activity
+The endpoint does **not** call the collectors again. `BackgroundMonitoringService` derives the top-process ranking from the complete process list already contained in the latest sample.
 
 ---
 
-# Possible `/api/disks/`
+# `GET /api/disk/`
 
-Rather than monitoring only C:, this endpoint could enumerate storage devices.
+## Purpose
 
-Example:
+Provides the dedicated Disk page with:
+
+- current C: filesystem capacity
+- current system-wide read throughput
+- current system-wide write throughput
+- the recent 60-sample disk history
+
+Example shape:
 
 ```json
 {
-    "disks": [
-        {
-            "device": "C:",
-            "percent": 92.4
-        },
-        {
-            "device": "D:",
-            "percent": 61.2
-        }
-    ]
+    "timestamp": "...",
+    "disk": {
+        "percent": 92.4,
+        "total_bytes": 998848331776,
+        "used_bytes": 922745000000,
+        "free_bytes": 76103331776,
+        "read_bytes_per_second": 4823441.73,
+        "write_bytes_per_second": 1059123.51
+    },
+    "history": []
 }
 ```
+
+Physical-drive model, SSD/NVMe type and health are **not duplicated** into this live endpoint. The Disk frontend obtains those slow-changing facts from `/api/hardware/`.
 
 ---
 

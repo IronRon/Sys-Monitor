@@ -1,0 +1,451 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Disk | Sys Monitor</title>
+
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/disk.css' %}">
+
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+
+</head>
+
+
+<body>
+
+    <main class="disk-page">
+
+        <header class="disk-header">
+
+            <div>
+
+                <span class="page-eyebrow">
+                    SYS MONITOR
+                </span>
+
+                <h1>
+                    Disk
+                </h1>
+
+                <p>
+                    Storage capacity, activity and physical hardware
+                </p>
+
+            </div>
+
+
+            <nav class="main-nav">
+
+                <a href="/">
+                    Overview
+                </a>
+
+                <a href="/processes/">
+                    Processes
+                </a>
+
+                <a href="/hardware/">
+                    Hardware
+                </a>
+
+                <a href="/memory/">
+                    Memory
+                </a>
+
+                <a href="/disk/" class="active">
+                    Disk
+                </a>
+
+                <a href="/docs/">
+                    Docs
+                </a>
+
+            </nav>
+
+        </header>
+
+
+        <!-- Overview -->
+
+        <section class="disk-overview">
+
+            <article class="capacity-card">
+
+                <div class="capacity-heading">
+
+                    <div>
+
+                        <span class="section-label">
+                            SYSTEM VOLUME
+                        </span>
+
+                        <h2>
+                            C:
+                        </h2>
+
+                        <p>
+                            Filesystem capacity
+                        </p>
+
+                    </div>
+
+
+                    <strong id="disk-percent">
+                        --%
+                    </strong>
+
+                </div>
+
+
+                <div class="capacity-track">
+
+                    <div id="capacity-used-bar" class="capacity-used-bar">
+                    </div>
+
+                </div>
+
+
+                <div class="capacity-values">
+
+                    <div>
+
+                        <span>
+                            Used
+                        </span>
+
+                        <strong id="disk-used">
+                            --
+                        </strong>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            Free
+                        </span>
+
+                        <strong id="disk-free">
+                            --
+                        </strong>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            Total
+                        </span>
+
+                        <strong id="disk-total">
+                            --
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </article>
+
+
+            <article class="throughput-card read">
+
+                <span class="throughput-icon">
+                    ↓
+                </span>
+
+                <span class="section-label">
+                    READ
+                </span>
+
+                <strong id="disk-read">
+                    -- MB/s
+                </strong>
+
+                <small>
+                    Data being read from storage
+                </small>
+
+            </article>
+
+
+            <article class="throughput-card write">
+
+                <span class="throughput-icon">
+                    ↑
+                </span>
+
+                <span class="section-label">
+                    WRITE
+                </span>
+
+                <strong id="disk-write">
+                    -- MB/s
+                </strong>
+
+                <small>
+                    Data being written to storage
+                </small>
+
+            </article>
+
+        </section>
+
+
+        <!-- Live activity -->
+
+        <section class="disk-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        LIVE ACTIVITY
+                    </span>
+
+                    <h2>
+                        Read / Write Throughput
+                    </h2>
+
+                    <p>
+                        Last 60 seconds
+                    </p>
+
+                </div>
+
+
+                <span id="disk-sample-count">
+                    0 / 60 samples
+                </span>
+
+            </div>
+
+
+            <div class="disk-chart-container">
+
+                <canvas id="disk-chart">
+                </canvas>
+
+            </div>
+
+        </section>
+
+
+        <!-- Capacity history -->
+
+        <section class="disk-card capacity-explanation-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        CAPACITY VS ACTIVITY
+                    </span>
+
+                    <h2>
+                        Two Different Measurements
+                    </h2>
+
+                </div>
+
+            </div>
+
+
+            <div class="comparison-grid">
+
+                <article>
+
+                    <span class="comparison-number">
+                        01
+                    </span>
+
+                    <h3>
+                        Capacity Used
+                    </h3>
+
+                    <strong id="capacity-example">
+                        --%
+                    </strong>
+
+                    <p>
+                        This tells you how much of the filesystem
+                        contains stored data. It changes relatively
+                        slowly as files are created or deleted.
+                    </p>
+
+                </article>
+
+
+                <article>
+
+                    <span class="comparison-number">
+                        02
+                    </span>
+
+                    <h3>
+                        Disk Activity
+                    </h3>
+
+                    <strong>
+                        MB/s
+                    </strong>
+
+                    <p>
+                        Read and write throughput tell you how much
+                        data is moving through storage during the
+                        current sampling interval.
+                    </p>
+
+                </article>
+
+            </div>
+
+        </section>
+
+
+        <!-- Hardware -->
+
+        <section class="disk-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        STORAGE HARDWARE
+                    </span>
+
+                    <h2>
+                        Physical Drives
+                    </h2>
+
+                    <p>
+                        Static drive information discovered by Windows
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div id="physical-disk-grid" class="physical-disk-grid">
+            </div>
+
+        </section>
+
+
+        <!-- Concepts -->
+
+        <section class="disk-learning">
+
+            <article class="concept-card">
+
+                <span>
+                    01
+                </span>
+
+                <h3>
+                    Read
+                </h3>
+
+                <p>
+                    A read happens when data moves from persistent
+                    storage into memory so the computer can use it.
+                    Opening an application or loading a file can
+                    generate disk reads.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>
+                    02
+                </span>
+
+                <h3>
+                    Write
+                </h3>
+
+                <p>
+                    A write happens when data is sent to persistent
+                    storage. Saving files, installing software and
+                    writing logs can generate disk writes.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>
+                    03
+                </span>
+
+                <h3>
+                    Filesystem
+                </h3>
+
+                <p>
+                    A filesystem organises files and directories on
+                    storage. The C: capacity shown above refers to a
+                    filesystem volume rather than directly describing
+                    the entire physical device.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>
+                    04
+                </span>
+
+                <h3>
+                    Physical Drive
+                </h3>
+
+                <p>
+                    A physical disk is the actual storage device.
+                    One physical drive can contain one or more
+                    partitions or volumes.
+                </p>
+
+            </article>
+
+        </section>
+
+
+        <footer class="disk-footer">
+
+            <span id="disk-last-updated">
+                Waiting for first sample...
+            </span>
+
+        </footer>
+
+    </main>
+
+
+    <script src="{% static 'dashboard/js/disk.js' %}"></script>
+
+</body>
+
+</html>

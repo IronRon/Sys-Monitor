@@ -1,0 +1,445 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Memory | Sys Monitor</title>
+
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
+
+    <link rel="stylesheet" href="{% static 'dashboard/css/memory.css' %}">
+
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+
+</head>
+
+
+<body>
+
+    <main class="memory-page">
+
+        <header class="memory-header">
+
+            <div>
+
+                <span class="page-eyebrow">
+                    SYS MONITOR
+                </span>
+
+                <h1>
+                    Memory
+                </h1>
+
+                <p>
+                    Physical memory, paging and process usage
+                </p>
+
+            </div>
+
+
+            <nav class="main-nav">
+
+                <a href="/">
+                    Overview
+                </a>
+
+                <a href="/processes/">
+                    Processes
+                </a>
+
+                <a href="/hardware/">
+                    Hardware
+                </a>
+
+                <a href="/memory/" class="active">
+                    Memory
+                </a>
+
+                <a href="/disk/">
+                    Disk
+                </a>
+
+                <a href="/docs/">
+                    Docs
+                </a>
+
+            </nav>
+
+        </header>
+
+
+        <!-- Overview -->
+
+        <section class="memory-overview">
+
+            <article class="memory-ring-card">
+
+                <div id="memory-ring" class="memory-ring">
+
+                    <div class="memory-ring-inner">
+
+                        <strong id="memory-percent">
+                            --%
+                        </strong>
+
+                        <span>
+                            In Use
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <div>
+
+                    <span class="section-label">
+                        PHYSICAL MEMORY
+                    </span>
+
+                    <h2 id="memory-total">
+                        --
+                    </h2>
+
+                    <p>
+                        Installed usable memory
+                    </p>
+
+                </div>
+
+            </article>
+
+
+            <article class="memory-stat">
+
+                <span>
+                    In Use
+                </span>
+
+                <strong id="memory-used">
+                    --
+                </strong>
+
+                <small>
+                    Total minus available
+                </small>
+
+            </article>
+
+
+            <article class="memory-stat available">
+
+                <span>
+                    Available
+                </span>
+
+                <strong id="memory-available">
+                    --
+                </strong>
+
+                <small>
+                    Ready for applications
+                </small>
+
+            </article>
+
+
+            <article class="memory-stat pagefile">
+
+                <span>
+                    Page File
+                </span>
+
+                <strong id="pagefile-percent">
+                    --%
+                </strong>
+
+                <small id="pagefile-detail">
+                    --
+                </small>
+
+            </article>
+
+        </section>
+
+
+        <!-- Breakdown -->
+
+        <section class="memory-card">
+
+            <div class="card-heading">
+
+                <div>
+                    <span class="section-label">
+                        CURRENT BREAKDOWN
+                    </span>
+
+                    <h2>
+                        Physical Memory
+                    </h2>
+                </div>
+
+            </div>
+
+
+            <div class="memory-breakdown-bar">
+
+                <div id="memory-used-bar" class="breakdown-used"></div>
+
+                <div id="memory-available-bar" class="breakdown-available"></div>
+
+            </div>
+
+
+            <div class="breakdown-legend">
+
+                <div>
+                    <span class="legend-dot used"></span>
+
+                    <span>
+                        In Use
+                    </span>
+
+                    <strong id="breakdown-used">
+                        --
+                    </strong>
+                </div>
+
+
+                <div>
+                    <span class="legend-dot available"></span>
+
+                    <span>
+                        Available
+                    </span>
+
+                    <strong id="breakdown-available">
+                        --
+                    </strong>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- History -->
+
+        <section class="memory-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        LIVE HISTORY
+                    </span>
+
+                    <h2>
+                        Last 60 Seconds
+                    </h2>
+
+                </div>
+
+                <span id="memory-sample-count">
+                    0 / 60 samples
+                </span>
+
+            </div>
+
+
+            <div class="memory-chart-container">
+
+                <canvas id="memory-chart">
+                </canvas>
+
+            </div>
+
+        </section>
+
+
+        <!-- Processes -->
+
+        <section class="memory-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        PROCESS MEMORY
+                    </span>
+
+                    <h2>
+                        Top Memory Processes
+                    </h2>
+
+                    <p>
+                        Largest working sets right now
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="table-wrapper">
+
+                <table class="memory-process-table">
+
+                    <thead>
+
+                        <tr>
+                            <th>Process</th>
+                            <th>PID</th>
+                            <th>Memory</th>
+                            <th>% of RAM</th>
+                            <th></th>
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody id="memory-process-body">
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+
+
+        <!-- RAM hardware -->
+
+        <section class="memory-card">
+
+            <div class="card-heading">
+
+                <div>
+
+                    <span class="section-label">
+                        MEMORY HARDWARE
+                    </span>
+
+                    <h2>
+                        Installed RAM Modules
+                    </h2>
+
+                    <p>
+                        Static hardware information from Windows
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="ram-module-grid" id="ram-modules">
+            </div>
+
+        </section>
+
+
+        <!-- Learning -->
+
+        <section class="memory-learning">
+
+            <article class="concept-card">
+
+                <span>01</span>
+
+                <h3>
+                    Available Memory
+                </h3>
+
+                <p>
+                    Available memory is the amount Windows can
+                    make available to applications without
+                    needing to page memory out to disk.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>02</span>
+
+                <h3>
+                    Working Set
+                </h3>
+
+                <p>
+                    A process working set is broadly the memory
+                    associated with that process that is
+                    currently resident in physical RAM. This is
+                    the process memory value used by Sys Monitor.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>03</span>
+
+                <h3>
+                    Caching
+                </h3>
+
+                <p>
+                    Windows can use otherwise idle RAM to keep
+                    recently useful data close to the CPU.
+                    Cached memory can often be reclaimed when
+                    applications need more memory.
+                </p>
+
+            </article>
+
+
+            <article class="concept-card">
+
+                <span>04</span>
+
+                <h3>
+                    Paging
+                </h3>
+
+                <p>
+                    Windows can use page files as part of its
+                    committed-memory system. A page file extends
+                    the amount of committed memory the system
+                    can support, but disk storage is far slower
+                    than physical RAM.
+                </p>
+
+            </article>
+
+        </section>
+
+
+        <footer class="memory-footer">
+
+            <span id="memory-last-updated">
+                Waiting for first sample...
+            </span>
+
+        </footer>
+
+    </main>
+
+
+    <script src="{% static 'dashboard/js/memory.js' %}"></script>
+
+</body>
+
+</html>

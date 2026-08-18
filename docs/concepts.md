@@ -1121,6 +1121,63 @@ This allows different interfaces to format the same data differently.
 ---
 
 
+# Memory and Storage Concepts
+
+## Available Memory
+
+Available memory estimates how much physical memory Windows can make available to applications without immediately needing to page memory out. It is more useful than looking only at a raw `free` value because operating systems deliberately use RAM for caches and other reclaimable purposes.
+
+## Page File
+
+A page file is disk-backed storage used by Windows as part of virtual-memory and committed-memory management. Sys Monitor displays page-file usage separately from physical RAM because page-file capacity and RAM utilisation are related but are not the same measurement.
+
+## Paging
+
+Paging is the movement/management of memory in fixed-size pages. If memory pressure requires data to be backed by slower storage, page-file activity can become relevant. Physical RAM remains much faster than disk-backed storage.
+
+## Caching
+
+Operating systems can use otherwise idle RAM to cache useful data. Cached memory may still be reclaimable when applications need memory, which is why "used" RAM does not automatically mean memory is being wasted.
+
+## Filesystem / Volume
+
+A filesystem organises files and directories on a storage volume. In the current Disk page, the C: percentage describes how much of that filesystem's capacity is occupied.
+
+## Physical Drive
+
+A physical drive is the actual SSD or HDD hardware. One physical drive may contain multiple partitions or volumes. Sys Monitor therefore gets live C: capacity from the disk collector but gets the drive model, SSD/NVMe type and health from the separate hardware service.
+
+## Capacity vs Activity
+
+Disk capacity and disk activity are different measurements:
+
+```text
+capacity
+    → how full the storage is
+
+activity / throughput
+    → how much data is being read or written now
+```
+
+A disk can be nearly full but idle, or mostly empty while processing heavy I/O.
+
+## Read and Write Throughput
+
+A disk **read** transfers data from persistent storage so it can be used by the system. A **write** stores data persistently. Sys Monitor calculates current read/write throughput from changes in cumulative disk I/O counters divided by elapsed time.
+
+## MB vs MiB
+
+Decimal and binary byte units are slightly different:
+
+```text
+1 MB  = 1,000,000 bytes
+1 MiB = 1,048,576 bytes
+```
+
+Sys Monitor currently performs many conversions using powers of 1024 while the UI often uses familiar `MB` / `GB` labels. A stricter future UI could label those values as MiB/GiB.
+
+---
+
 # Hardware Identification Concepts
 
 ## Static vs Live Data
@@ -1529,6 +1586,13 @@ The main new ideas introduced by the project so far include:
 * Mermaid diagrams
 * CDNs
 * source-of-truth documentation
+* available vs used physical memory
+* page files and paging
+* memory caching
+* filesystem/volume vs physical drive
+* disk capacity vs disk activity
+* read/write throughput
+* MB/GB vs MiB/GiB unit conventions
 * static vs live system data
 * Windows CIM hardware discovery
 * hardware-data normalisation

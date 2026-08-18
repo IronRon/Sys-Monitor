@@ -71,19 +71,25 @@ src/dashboard/
 │   └── dashboard/
 │       ├── index.html
 │       ├── processes.html
-│       └── hardware.html
+│       ├── hardware.html
+│       ├── memory.html
+│       └── disk.html
 │
 └── static/
     └── dashboard/
         ├── css/
         │   ├── dashboard.css
         │   ├── processes.css
-        │   └── hardware.css
+        │   ├── hardware.css
+        │   ├── memory.css
+        │   └── disk.css
         │
         └── js/
             ├── dashboard.js
             ├── processes.js
-            └── hardware.js
+            ├── hardware.js
+            ├── memory.js
+            └── disk.js
 ```
 
 ---
@@ -1499,14 +1505,70 @@ The page deliberately distinguishes raw facts from interpretation:
 Some labels also preserve data provenance. For example, the GPU UI displays **Windows-reported VRAM** rather than simply `VRAM` because that Windows field may not always match a modern GPU's authoritative specification.
 
 ---
+
+# Dedicated Memory Page
+
+The `/memory/` page uses `memory.html`, `memory.css` and `memory.js`. It requests live data from `/api/memory/` and static DIMM information from `/api/hardware/`.
+
+The page renders:
+
+- a live physical-memory utilisation ring
+- in-use and available memory cards
+- page-file usage
+- a proportional in-use/available breakdown bar
+- a 60-second Chart.js history of in-use vs available memory
+- a Top Memory Processes table with per-process bars
+- dynamically generated RAM-module cards
+- short explanations of available memory, working sets, caching and paging
+
+```mermaid
+flowchart LR
+    MEMAPI["/api/memory/"] --> JS["memory.js"]
+    HWAPI["/api/hardware/"] --> JS
+    JS --> LIVE["Live memory UI + chart"]
+    JS --> PROC["Top memory processes"]
+    JS --> DIMM["RAM module cards"]
+```
+
+The frontend does not assume that a computer has exactly two memory modules. It loops over `hardware.memory.modules[]` and creates one module card per detected DIMM.
+
+---
+
+# Dedicated Disk Page
+
+The `/disk/` page uses `disk.html`, `disk.css` and `disk.js`. Like the Memory page, it combines a live resource endpoint with cached hardware identity.
+
+The page renders:
+
+- C: filesystem used/free/total capacity
+- current read throughput
+- current write throughput
+- a 60-second Chart.js read/write history
+- physical-drive model, capacity, SSD/HDD type, bus type and health
+- explanations of reads, writes, filesystems, physical drives and capacity vs activity
+
+```mermaid
+flowchart LR
+    DISKAPI["/api/disk/"] --> JS["disk.js"]
+    HWAPI["/api/hardware/"] --> JS
+    JS --> CAP["Filesystem capacity UI"]
+    JS --> CHART["Read / write Chart.js graph"]
+    JS --> DRIVE["Physical drive cards"]
+```
+
+This page deliberately presents **capacity** and **activity** as separate concepts. A filesystem can be 90% full while the drive is currently doing almost no I/O, or a mostly empty drive can be reading/writing heavily.
+
+---
 # Current Limitations
 
 The frontend is intentionally still simple.
 
 Current limitations include:
 
-* only CPU history is graphed
+* CPU, memory and disk have short live history graphs, but no persistent long-term history
 * process details are currently limited to name, PID, PPID, CPU and memory
+* memory does not yet expose Windows-specific cache/standby, pool or page-fault counters
+* disk does not yet attribute live I/O to individual processes or physical devices
 * no user-selectable refresh rate
 * no persistent chart history
 * Chart.js currently loads from an external CDN
@@ -1517,13 +1579,13 @@ Current limitations include:
 
 # Planned Frontend Development
 
-Near-term frontend work can now focus on richer graphs, more detailed process information and general navigation/layout polish rather than creating the Processes page itself.
+Near-term frontend work can now focus on the dedicated Network page, self-monitoring overhead, historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
 
 ---
 
 # Current Frontend Architecture
 
-The project now has four browser-facing areas: the overview dashboard, the dedicated Processes page, the Hardware / About My PC page and the documentation site.
+The project now has six main browser-facing areas: the overview dashboard, Processes page, Hardware / About My PC page, Memory page, Disk page and documentation site.
 
 ```mermaid
 flowchart TD
@@ -1577,6 +1639,32 @@ flowchart TD
         HTEMPLATE --> HUI
         HCSS --> HUI
         HJS --> HUI
+    end
+
+    subgraph Memory["Memory Page"]
+        MTEMPLATE["memory.html"]
+        MJS["memory.js"]
+        MAPI["/api/memory/"]
+        MHW["/api/hardware/"]
+        MUI["Breakdown / History / Processes / DIMMs"]
+
+        MAPI --> MJS
+        MHW --> MJS
+        MTEMPLATE --> MUI
+        MJS --> MUI
+    end
+
+    subgraph Disk["Disk Page"]
+        DTEMPLATE["disk.html"]
+        DJS["disk.js"]
+        DAPI["/api/disk/"]
+        DHW["/api/hardware/"]
+        DUI["Capacity / I-O History / Physical Drives"]
+
+        DAPI --> DJS
+        DHW --> DJS
+        DTEMPLATE --> DUI
+        DJS --> DUI
     end
 
     subgraph Docs["Documentation Site"]

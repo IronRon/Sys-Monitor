@@ -62,3 +62,46 @@ def hardware_api(request):
     return JsonResponse(
         data
     )
+
+def memory_page(request):
+
+    monitoring_service.start()
+
+    return render(
+        request,
+        "dashboard/memory.html",
+    )
+
+
+def memory_api(request):
+
+    data = (
+        monitoring_service
+        .get_memory_data()
+    )
+
+    return JsonResponse(
+        data
+    )
+
+
+def disk_page(request):
+
+    monitoring_service.start()
+
+    return render(
+        request,
+        "dashboard/disk.html",
+    )
+
+
+def disk_api(request):
+
+    data = (
+        monitoring_service
+        .get_disk_data()
+    )
+
+    return JsonResponse(
+        data
+    )

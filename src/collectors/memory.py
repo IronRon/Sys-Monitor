@@ -13,9 +13,37 @@ import psutil
 def get_memory_usage():
     memory = psutil.virtual_memory()
 
+    pagefile = psutil.swap_memory()
+
+
     return {
-        "percent": memory.percent,
-        "total": memory.total,
-        "available": memory.available,
-        "used": memory.used,
+        "percent":
+            memory.percent,
+
+        "total":
+            memory.total,
+
+        "used":
+            memory.used,
+
+        "available":
+            memory.available,
+
+        "free":
+            memory.free,
+
+
+        "pagefile": {
+            "total":
+                pagefile.total,
+
+            "used":
+                pagefile.used,
+
+            "free":
+                pagefile.free,
+
+            "percent":
+                pagefile.percent,
+        },
     }
