@@ -554,14 +554,14 @@ Lower layers should generally not depend on higher presentation layers.
 
 ## Service Layer
 
-`MonitoringService` is the bridge between Django and the core monitoring system.
+`BackgroundMonitoringService` is the bridge between Django and the core monitoring system. It also owns the background sampling thread and shared latest sample used by both APIs.
 
 Instead of putting monitoring state and calculations inside a Django view:
 
 ```text
 View
     ↓
-MonitoringService
+BackgroundMonitoringService
     ↓
 SystemSampler
 ```
@@ -619,7 +619,7 @@ Sys Monitor currently uses:
 threading.Lock()
 ```
 
-inside `MonitoringService`.
+inside `BackgroundMonitoringService`.
 
 Conceptually:
 
@@ -636,6 +636,68 @@ UNLOCK
          ↓
         LOCK
 ```
+
+---
+
+# Background Execution
+
+## Thread
+
+A **thread** is one flow of execution inside a process. Sys Monitor's Django process now has a background sampler thread that can collect system data while Django also handles HTTP requests.
+
+```text
+Python / Django process
+├── request handling
+└── background sampler thread
+```
+
+---
+
+## Daemon Thread
+
+The sampler thread is created with:
+
+```python
+daemon=True
+```
+
+A daemon thread does not keep the Python interpreter alive after all non-daemon work has finished. It is a safety net, not the main graceful-shutdown mechanism.
+
+---
+
+## `threading.Event`
+
+An `Event` is a thread-safe flag that one thread can set and another can wait for. Sys Monitor uses a ready event to signal that the first useful sample exists and a stop event to wake and terminate the worker.
+
+---
+
+## `join()`
+
+Calling `thread.join()` means the current thread waits for another thread to finish. During shutdown, Sys Monitor signals the sampler to stop and then waits briefly for it to exit.
+
+---
+
+## `atexit`
+
+Python's `atexit` mechanism registers functions to run during normal interpreter shutdown. Sys Monitor registers the monitoring service's `stop()` method so Ctrl+C / normal server shutdown can request a clean worker exit.
+
+---
+
+## Background Sampling
+
+Background sampling means measurements are produced independently of browser requests.
+
+```text
+background worker
+    ↓
+sample every ~1 second
+    ↓
+latest shared state
+    ↓
+APIs read that state
+```
+
+The browser can close while sampling continues as long as the Django Python process remains running.
 
 ---
 
@@ -731,33 +793,18 @@ approximately once per second.
 
 ## Request-Driven Monitoring
 
-The current web monitor creates new samples when the dashboard requests them.
-
-Therefore:
+An earlier version of Sys Monitor took new samples when `/api/system/` or `/api/processes/` was requested. That design has now been replaced by background sampling. It remains useful as a comparison:
 
 ```text
-dashboard open
-    ↓
-requests occur
-    ↓
-samples occur
+old:
+request → collect → respond
+
+current:
+background collect → publish latest state
+request → read → respond
 ```
-
-but:
-
-```text
-dashboard closed
-    ↓
-no requests
-    ↓
-web sampling stops
-```
-
-A later version may introduce background monitoring.
 
 ---
-
-# JavaScript Concepts
 
 ## DOM
 
@@ -1384,7 +1431,11 @@ The main new ideas introduced by the project so far include:
 * JSON
 * serialization
 * polling
-* request-driven monitoring
+* request-driven vs background monitoring
+* threads and daemon threads
+* `threading.Event`
+* `join()`
+* `atexit` cleanup
 * the DOM
 * asynchronous JavaScript
 * `fetch()`

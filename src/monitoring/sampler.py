@@ -113,6 +113,7 @@ class SystemSampler:
                 "count": len(processes),
                 "top_cpu": top_cpu_processes,
                 "top_memory": top_memory_processes,
+                "items": processes,
             },
         }
 

@@ -1099,7 +1099,7 @@ redraw
 
 The current frontend uses **polling**.
 
-Polling means repeatedly asking the server for new information.
+Polling means repeatedly asking the server for the newest information. The important architectural change is that these requests no longer trigger system collection: the Python background sampler is already running independently, and polling only refreshes what the browser displays.
 
 ```text
 Browser:

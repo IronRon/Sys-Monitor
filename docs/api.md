@@ -134,7 +134,7 @@ flowchart LR
 
     View["system_api()"]
 
-    Service["MonitoringService"]
+    Service["BackgroundMonitoringService"]
 
     Sampler["SystemSampler"]
 
@@ -196,7 +196,7 @@ flowchart LR
     subgraph Backend["Backend — Python"]
         C["Collectors"]
         S["SystemSampler"]
-        MS["MonitoringService"]
+        MS["BackgroundMonitoringService"]
         D["Django"]
     end
 
@@ -376,7 +376,7 @@ def system_api(request):
 Its responsibilities are:
 
 1. receive the HTTP request
-2. ask `MonitoringService` for system data
+2. ask `BackgroundMonitoringService` for system data
 3. convert the result into an HTTP JSON response
 
 It does not directly call psutil.
@@ -385,35 +385,29 @@ It does not directly call psutil.
 
 # Request Flow
 
+The API no longer creates a fresh monitoring sample for each request. A background thread continuously updates `latest_sample` and `MonitorHistory`; the HTTP request only reads a copy of that state.
+
 ```mermaid
 sequenceDiagram
+    participant Worker as Background sampler
+    participant Sampler as SystemSampler
+    participant Service as BackgroundMonitoringService
     participant Client
     participant Django as system_api()
-    participant Service as MonitoringService
-    participant Sampler as SystemSampler
-    participant Collectors
+
+    loop approximately every 1 second
+        Worker->>Sampler: sample(elapsed_seconds)
+        Sampler-->>Worker: Complete system sample
+        Worker->>Service: Publish latest sample + history
+    end
 
     Client->>Django: GET /api/system/
-
     Django->>Service: get_system_data()
-
-    Service->>Sampler: sample(elapsed_seconds)
-
-    Sampler->>Collectors: Read CPU / RAM / Disk / Network / Processes
-
-    Collectors-->>Sampler: Raw measurements
-
-    Sampler->>Sampler: Calculate rates
-
-    Sampler-->>Service: System sample
-
-    Service->>Service: Add sample to history
-    Service->>Service: Serialize values
-
-    Service-->>Django: API-ready dictionary
-
+    Service-->>Django: Copy latest sample/history
     Django-->>Client: JSON response
 ```
+
+The same latest complete sample also contains the full process list used by `/api/processes/`, so the two endpoints do not trigger competing process measurements.
 
 ---
 
@@ -1349,7 +1343,7 @@ flowchart TD
 
     HISTORY["MonitorHistory"]
 
-    SERVICE["MonitoringService"]
+    SERVICE["BackgroundMonitoringService"]
 
     API["API Response"]
 
@@ -1489,29 +1483,18 @@ which converts the JSON response back into a JavaScript object.
 sequenceDiagram
     participant JS as dashboard.js
     participant API as /api/system/
-    participant Service as MonitoringService
-    participant Sampler as SystemSampler
+    participant Service as BackgroundMonitoringService
 
     JS->>API: fetch("/api/system/")
-
     API->>Service: get_system_data()
-
-    Service->>Sampler: sample(...)
-
-    Sampler-->>Service: Python sample
-
-    Service->>Service: Serialize data
-
-    Service-->>API: Dictionary
-
+    Service-->>API: Copy of latest background sample
     API-->>JS: JSON
-
     JS->>JS: response.json()
-
     JS->>JS: updateCards(data)
-
     JS->>JS: updateCpuChart(data.history)
 ```
+
+The frontend still polls approximately once per second, but polling now controls **display refresh**, not **system sampling**.
 
 ---
 
@@ -1687,113 +1670,56 @@ flowchart TD
 
 ---
 
-# Why the API Is Currently Stateful
+# Shared Background State
 
-Although HTTP GET requests are normally thought of as independent, the current monitoring service maintains state between requests.
-
-It remembers:
+The monitoring service remains stateful, but that state is now owned by the background worker rather than being advanced by HTTP requests. It includes:
 
 ```text
-previous disk counters
-previous network counters
-previous sample time
-CPU priming state
-recent history
+SystemSampler baselines
+latest complete sample
+60-sample rolling history
+worker lifecycle state
+ready / stop events
 ```
 
-Therefore:
-
-```text
-request 2
-```
-
-depends partly on information retained from:
-
-```text
-request 1
-```
-
-This is required because throughput and CPU measurements depend on changes over time.
-
----
-
-# Shared State
+Both APIs read from this shared state:
 
 ```mermaid
 flowchart TD
-    R1["Request 1"]
-    R2["Request 2"]
-
-    SERVICE["MonitoringService"]
-
-    STATE["Shared State<br/>previous counters<br/>history<br/>timing"]
-
-    R1 --> SERVICE
-    R2 --> SERVICE
-
-    SERVICE <--> STATE
+    WORKER["Background sampler"] --> STATE["Latest sample + history"]
+    STATE --> SYS["/api/system/"]
+    STATE --> PROC["/api/processes/"]
 ```
 
-Because requests may theoretically overlap, the service currently protects this shared state using a thread lock.
+A lock protects publication/copying of shared data. API methods copy the data while holding the lock briefly and then serialize the copy after the lock is released.
 
 ---
 
 # Concurrency Protection
 
-Conceptually:
-
-```text
-Request A
-    ↓
-acquire lock
-    ↓
-update monitoring state
-    ↓
-release lock
-
-Request B
-    ↓
-can then access state
-```
-
-This prevents simultaneous requests from performing conflicting updates to:
-
-```text
-previous_disk
-previous_network
-history
-previous_time
-```
+The background worker writes monitoring state while Django request threads read it. The service uses a `threading.RLock()` to prevent a request from observing partially updated state. This is different from the previous design, where the lock mainly prevented two HTTP requests from sampling simultaneously.
 
 ---
 
 # First API Request
 
-The first request behaves slightly differently.
-
-The monitoring service has not yet established baselines.
-
-Therefore:
+If the background service has not started yet, the first consumer starts it. The service primes CPU/process/I/O baselines, launches the worker, and waits briefly on `_ready_event` for the first useful sample. Later API requests normally return immediately from the already-populated latest state.
 
 ```text
-First request
-     ↓
-prime sampler
-     ↓
-wait briefly
-     ↓
-take first useful sample
-     ↓
-return response
+first request
+    ↓
+start + prime background monitor if needed
+    ↓
+wait for first useful sample
+    ↓
+return JSON
+
+later requests
+    ↓
+copy latest sample
+    ↓
+return JSON
 ```
-
-This means the first call to:
-
-```text
-/api/system/
-```
-
-can take longer than later requests.
 
 ---
 
@@ -1854,7 +1780,7 @@ The current APIs are:
 * read-only
 * JSON-based
 * unauthenticated
-* request-driven
+* backed by continuous background sampling
 * stateful internally
 * designed for the local dashboard
 * not yet versioned
@@ -2498,7 +2424,7 @@ flowchart TD
 
     HISTORY["MonitorHistory"]
 
-    SERVICE["MonitoringService"]
+    SERVICE["BackgroundMonitoringService"]
 
     VIEW["system_api()"]
 
@@ -2561,7 +2487,7 @@ formats
 visualises
 ```
 
-The current API is deliberately small and request-driven, but its structure provides a foundation for future dedicated endpoints including:
+The current API is deliberately small and reads from one continuously updated background sampling stream. Its structure provides a foundation for future dedicated endpoints including:
 
 ```text
 /api/cpu/

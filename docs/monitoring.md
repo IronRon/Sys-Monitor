@@ -999,32 +999,32 @@ get_top_memory_processes(
 )
 ```
 
-The sample therefore contains only the top process rankings required by the overview dashboard and terminal interface.
+The current web sampler keeps both forms of process data in the **latest** sample:
 
-The dedicated Processes page uses a separate `ProcessService`, which calls the same process collector but returns the complete process list through `/api/processes/`. This keeps the main `/api/system/` response smaller while reusing the same collection logic.
+- `top_cpu` and `top_memory` for the overview dashboard
+- `items` containing the complete process list for `/api/processes/`
+
+Processes are therefore collected once per sampling cycle and shared by both APIs. The complete process list is deliberately omitted from each rolling-history entry so that hundreds of process objects are not duplicated 60 times.
 
 ---
 
 
-# ProcessService
+# Shared Process Sampling
 
-The dedicated Processes page uses a separate Django-side `ProcessService`.
+The earlier `ProcessService` has been removed. Both the Overview and Processes pages now read from one shared `BackgroundMonitoringService`.
 
 ```text
-/processes/
-    ↓
-processes.js
-    ↓
-/api/processes/
-    ↓
-ProcessService
-    ↓
-processes.py
+BackgroundMonitoringService
+        │
+        ├── latest sample
+        │      ├── top CPU / RAM processes
+        │      └── complete process list
+        │
+        ├── /api/system/
+        └── /api/processes/
 ```
 
-`ProcessService` primes process CPU measurements, retrieves the complete process list and returns a timestamp, process count and process objects. The frontend then decides whether to display those objects as a flat table or as a parent/child tree.
-
-Like the main `MonitoringService`, this service currently uses request-driven sampling. If both monitoring pages are active at once, their process CPU sampling intervals can affect one another. A later background monitoring loop would remove that limitation by collecting once and sharing the latest sample with both APIs.
+This avoids taking a second process CPU measurement whenever `/api/processes/` is requested and gives both pages a consistent view of the same sampling cycle.
 
 ---
 
@@ -1707,7 +1707,7 @@ Instead:
 ```text
 Django
    ↓
-MonitoringService
+BackgroundMonitoringService
    ↓
 SystemSampler
    ↓
@@ -1726,79 +1726,59 @@ The web interface therefore benefits from exactly the same monitoring calculatio
 
 # Current Django Sampling Behaviour
 
-At the current stage, monitoring is still driven by browser requests. The overview page requests `/api/system/`, while the Processes page requests `/api/processes/`.
+The Django web monitor now uses a **background sampling thread** rather than browser-request-driven collection.
 
 ```text
-Overview page                 Processes page
-     ↓                             ↓
-GET /api/system/             GET /api/processes/
-     ↓                             ↓
-MonitoringService              ProcessService
-     ↓                             ↓
-SystemSampler                process collector
-     ↓                             ↓
-JSON response                 JSON response
+                   Background thread
+                         │
+                    wait ~1 second
+                         ↓
+                    SystemSampler
+                         ↓
+              latest sample + history
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+       /api/system/          /api/processes/
+              │                     │
+              ▼                     ▼
+        Overview page          Processes page
 ```
 
-This means sampling is currently **request-driven** rather than being produced by one independent background monitor.
+Only the background worker calls `SystemSampler.sample()`. HTTP requests now read already-collected data. Closing the browser therefore stops frontend polling but **does not stop monitoring** while the Django Python process remains alive.
 
 ---
 
-# Request-Driven Monitoring
+# Background Monitoring Thread
 
-Current behaviour:
+`BackgroundMonitoringService.start()` primes the sampler and creates a Python `threading.Thread` whose target is the service's `_run()` method. The loop waits for roughly one sampling interval, takes one complete sample, stores it as `latest_sample`, and appends a smaller copy to `MonitorHistory`.
+
+The worker is created with `daemon=True`. A daemon thread does not keep the Python process alive by itself; however, graceful shutdown is handled separately using a stop event and `join()`.
 
 ```text
-Monitoring page open
-    ↓
-requests every ~1 second
-    ↓
-that page's sampling continues
-
-Monitoring page closed
-    ↓
-its requests stop
-    ↓
-that sampling path stops
+Django process
+│
+├── HTTP request handling
+│
+└── sys-monitor-sampler thread
+      ├── wait
+      ├── sample
+      ├── publish latest sample
+      └── repeat
 ```
-
-This is intentionally simple for the current version.
-
-It is not yet a true continuously running system-monitoring service.
 
 ---
 
-# Future Background Monitoring
+# Thread Events and Shutdown
 
-A more advanced architecture could use:
+The service uses two `threading.Event` objects:
 
-```text
-Background monitoring worker
-        ↓
-sample every second
-        ↓
-store samples
-        ↓
-dashboard only reads data
-```
+- `_ready_event` indicates that at least one useful sample has been produced.
+- `_stop_event` tells the worker to stop.
 
-Then:
+The sampling loop waits with `_stop_event.wait(sample_interval)` instead of a plain `time.sleep()`. This means a shutdown request can wake the worker immediately rather than waiting for the full interval.
 
-```text
-Browser open or closed
-        ↓
-monitoring continues
-```
-
-Possible future implementation approaches include:
-
-* dedicated Python thread
-* background worker process
-* Windows service
-* scheduled worker
-* separate monitoring daemon
-
-The current architecture is designed so that this transition can happen later without rewriting the collectors.
+`stop()` sets the stop event and then calls `thread.join(timeout=2)`, allowing the calling thread to wait briefly for the sampler to finish. `atexit.register(monitoring_service.stop)` requests this graceful shutdown during normal interpreter exit. `daemon=True` remains a final safety net so the worker cannot keep Python alive indefinitely.
 
 ---
 
@@ -1815,41 +1795,20 @@ previous network counters
 
 This means concurrent access must be handled carefully.
 
-The Django layer currently uses a:
-
-```python
-threading.Lock()
-```
-
-inside `MonitoringService`.
-
-This prevents multiple requests from sampling and updating the shared state at the same time.
-
-Conceptually:
+The background worker writes shared monitoring state while Django request threads read it. The service protects this state with a `threading.RLock()`.
 
 ```text
-Request A
-    ↓
-acquire lock
-    ↓
-sample
-    ↓
-update history
-    ↓
-release lock
-
-Request B
-    ↓
-wait
-    ↓
-acquire lock
+Background worker              API request
+       │                           │
+       ├── acquire lock            │
+       ├── publish sample          │ waits briefly
+       └── release lock            │
+                                   ├── acquire lock
+                                   ├── copy latest data
+                                   └── release lock
 ```
 
-The sampler itself does not currently attempt to provide thread safety.
-
-The service using the sampler is responsible for coordinating concurrent access.
-
-This keeps the monitoring component simpler.
+The API receives deep copies of the latest sample/history so it can serialize them without holding the lock for the entire HTTP response. The `SystemSampler` itself remains focused on measurement rather than providing its own concurrency layer.
 
 ---
 
@@ -2040,7 +1999,7 @@ The monitoring layer is still intentionally simple.
 
 Current limitations include:
 
-* sampling is not continuously background-driven
+* the background worker currently runs inside the Django Python process rather than as a separate Windows service/process
 * history is stored only in memory
 * only 60 recent samples are retained
 * samples disappear when the application stops
@@ -2166,7 +2125,7 @@ This would move the project from simple monitoring toward performance diagnosis.
 
 # Future Monitoring Architecture
 
-A future version may evolve toward:
+The current background thread already separates sampling from browser requests. A later production-style version may move that worker into a separate process/service and add persistent storage:
 
 ```mermaid
 flowchart TD
@@ -2189,9 +2148,9 @@ flowchart TD
 
 In this model:
 
-* monitoring runs continuously
-* the dashboard is only a consumer
-* history survives restarts
+* monitoring remains independent of browser requests
+* the worker can survive or restart independently of Django
+* history can survive application restarts
 * analytics can operate independently of the UI
 
 ---

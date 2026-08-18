@@ -11,7 +11,7 @@ While `collectors.md` explains how individual system resources are collected and
 * Django dashboard flow
 * API data flow
 * frontend/backend communication
-* the current request-driven monitoring model
+* the current background-monitoring model
 
 The central architectural goal is:
 
@@ -193,7 +193,7 @@ flowchart LR
     end
 
     subgraph Web["Django Layer"]
-        SERVICE["MonitoringService / ProcessService"]
+        SERVICE["BackgroundMonitoringService"]
         VIEWS["views.py"]
         URLS["urls.py"]
     end
@@ -733,7 +733,7 @@ flowchart TD
 
     View["Django View"]
 
-    Service["MonitoringService"]
+    Service["BackgroundMonitoringService"]
 
     Sampler["SystemSampler"]
 
@@ -752,7 +752,7 @@ The result then flows back in the opposite direction.
 flowchart BT
     Collectors["Collectors"]
     Sampler["SystemSampler"]
-    Service["MonitoringService"]
+    Service["BackgroundMonitoringService"]
     View["Django View"]
     JSON["JSON Response"]
     JS["dashboard.js"]
@@ -843,7 +843,7 @@ GET /api/system/
     ↓
 system_api()
     ↓
-MonitoringService
+BackgroundMonitoringService
     ↓
 JSON response
 ```
@@ -854,42 +854,36 @@ It should not know how disk throughput is calculated.
 
 ---
 
-# `MonitoringService`
+# `BackgroundMonitoringService`
 
-`dashboard/services.py` acts as a bridge between Django and the monitoring engine.
+`dashboard/services.py` now owns one continuously updated monitoring stream for the web application.
 
 ```mermaid
 flowchart LR
-    VIEW["Django View"]
-
-    SERVICE["MonitoringService"]
-
+    WORKER["Background sampler thread"]
+    SERVICE["BackgroundMonitoringService"]
     SAMPLER["SystemSampler"]
     HISTORY["MonitorHistory"]
+    LATEST["Latest complete sample"]
+    API1["/api/system/"]
+    API2["/api/processes/"]
 
-    VIEW --> SERVICE
-
-    SERVICE --> SAMPLER
-    SERVICE --> HISTORY
+    SERVICE --> WORKER
+    WORKER --> SAMPLER
+    SAMPLER --> LATEST
+    WORKER --> HISTORY
+    LATEST --> API1
+    HISTORY --> API1
+    LATEST --> API2
 ```
 
-The service currently owns:
-
-```text
-MonitoringService
-│
-├── SystemSampler
-├── MonitorHistory
-├── previous timing information
-├── priming state
-└── threading lock
-```
+The service owns the sampler, history, latest sample, worker thread, lifecycle events and synchronization lock. The complete process list is retained in the latest sample for the Processes API, but historical entries remain smaller.
 
 ---
 
 # Why Use a Service Layer?
 
-Without `MonitoringService`:
+Without `BackgroundMonitoringService`:
 
 ```text
 Django View
@@ -930,7 +924,7 @@ flowchart LR
     end
 
     subgraph ServiceLayer["Application Service"]
-        SERVICE["MonitoringService"]
+        SERVICE["BackgroundMonitoringService"]
     end
 
     subgraph Core["Monitoring Core"]
@@ -971,7 +965,7 @@ flowchart TD
 
     VIEW["system_api()"]
 
-    SERVICE["MonitoringService"]
+    SERVICE["BackgroundMonitoringService"]
 
     SAMPLER["SystemSampler"]
 
@@ -998,7 +992,7 @@ flowchart TD
 
     SAMPLER["SystemSampler"]
 
-    SERVICE["MonitoringService"]
+    SERVICE["BackgroundMonitoringService"]
 
     SERIALIZE["Serialize Python data"]
 
@@ -1021,51 +1015,33 @@ flowchart TD
 
 # End-to-End Web Request
 
-A single dashboard refresh cycle currently looks like:
+Collection and HTTP delivery are now separate flows. The background thread continuously produces samples; browser requests only retrieve the latest published state.
 
 ```mermaid
 sequenceDiagram
-    participant JS as dashboard.js
-    participant Django as Django View
-    participant Service as MonitoringService
+    participant Worker as Background sampler thread
     participant Sampler as SystemSampler
     participant Collectors
-    participant Windows
+    participant Service as BackgroundMonitoringService
+    participant JS as dashboard.js
+    participant Django as Django API
+
+    loop approximately every 1 second
+        Worker->>Sampler: sample(elapsed_seconds)
+        Sampler->>Collectors: Read system resources
+        Collectors-->>Sampler: Raw measurements
+        Sampler-->>Worker: Complete sample
+        Worker->>Service: Publish latest sample + history
+    end
 
     JS->>Django: GET /api/system/
-
     Django->>Service: get_system_data()
-
-    Service->>Sampler: sample(elapsed_seconds)
-
-    Sampler->>Collectors: Read system resources
-
-    Collectors->>Windows: Request information
-
-    Windows-->>Collectors: System values
-
-    Collectors-->>Sampler: Raw measurements
-
-    Sampler->>Sampler: Calculate rates
-    Sampler-->>Service: Complete sample
-
-    Service->>Service: Add sample to history
-    Service->>Service: Serialize timestamps
-
-    Service-->>Django: Python dictionary
-
+    Service-->>Django: Copy of latest data
     Django-->>JS: JSON response
-
-    JS->>JS: Update cards
-    JS->>JS: Update Chart.js
-
-    Note over JS: Wait approximately 1 second
-
-    JS->>Django: Next GET /api/system/
+    JS->>JS: Update cards and charts
 ```
 
 ---
-
 
 # Current Dashboard Presentation
 
@@ -1104,14 +1080,14 @@ flowchart LR
     PAGE["/processes/"]
     JS["processes.js"]
     API["/api/processes/"]
-    SERVICE["ProcessService"]
-    COLLECTOR["Process Collector"]
+    SERVICE["BackgroundMonitoringService"]
+    LATEST["Latest shared sample"]
 
     PAGE --> JS
     JS -->|"poll"| API
     API --> SERVICE
-    SERVICE --> COLLECTOR
-    COLLECTOR --> SERVICE
+    SERVICE --> LATEST
+    LATEST --> SERVICE
     SERVICE --> API
     API -->|"flat PID/PPID JSON"| JS
     JS --> TABLE["Sortable / searchable table"]
@@ -1352,172 +1328,58 @@ This cleanly separates backend and frontend technologies.
 
 ---
 
-# Current Request-Driven Architecture
+# Current Background-Monitoring Architecture
 
-The current web monitor is **request-driven**.
-
-This is an important architectural limitation to understand.
-
-The browser causes monitoring samples to be taken.
+The browser no longer determines when measurements are taken. A dedicated thread inside the Django Python process continuously samples the PC and publishes the newest state.
 
 ```mermaid
 flowchart TD
-    Browser["Dashboard Open"]
+    THREAD["Background sampler thread"]
+    SAMPLE["SystemSampler.sample()"]
+    LATEST["Latest complete sample"]
+    HISTORY["60-sample rolling history"]
+    SYS["/api/system/"]
+    PROC["/api/processes/"]
+    OVERVIEW["Overview page"]
+    PROCESSES["Processes page"]
 
-    Request["Request /api/system/"]
-
-    Sample["Create Monitoring Sample"]
-
-    History["Store Sample"]
-
-    Response["Return JSON"]
-
-    Wait["Wait ~1 second"]
-
-    Browser --> Request
-    Request --> Sample
-    Sample --> History
-    History --> Response
-    Response --> Wait
-    Wait --> Request
+    THREAD --> SAMPLE
+    SAMPLE --> LATEST
+    SAMPLE --> HISTORY
+    LATEST --> SYS
+    HISTORY --> SYS
+    LATEST --> PROC
+    SYS --> OVERVIEW
+    PROC --> PROCESSES
 ```
 
----
-
-# What Happens When the Dashboard Is Open?
+## Browser Open or Closed
 
 ```text
+Django process running
+        ↓
+background thread running
+        ↓
+samples continue
+
 Browser open
-     ↓
-JavaScript runs
-     ↓
-GET /api/system/
-     ↓
-sample created
-     ↓
-wait
-     ↓
-GET /api/system/
-     ↓
-sample created
-     ↓
-...
+        ↓
+polls APIs and displays latest samples
+
+Browser closed
+        ↓
+frontend polling stops, but monitoring continues
 ```
 
-The history fills:
+This removes the earlier conflict where `/api/system/` and `/api/processes/` could independently trigger process CPU measurements. Both endpoints now expose data from the same sampling cycle.
 
-```text
-1 / 60
-2 / 60
-3 / 60
-...
-60 / 60
-```
+## Worker Lifecycle
+
+The sampler thread is created with `daemon=True`, so it cannot keep the Python process alive on its own. Normal shutdown is still handled gracefully: `stop()` sets a `threading.Event`, the worker exits its loop, and `join()` waits briefly for it to finish. An `atexit` handler requests this shutdown during normal interpreter exit.
 
 ---
 
-# What Happens When the Dashboard Is Closed?
-
-Current architecture:
-
-```mermaid
-flowchart TD
-    CLOSE["Browser closes"]
-
-    STOP["No more API requests"]
-
-    NOSAMPLES["No new samples"]
-
-    HISTORY["History stops advancing"]
-
-    CLOSE --> STOP
-    STOP --> NOSAMPLES
-    NOSAMPLES --> HISTORY
-```
-
-Therefore:
-
-> The current Django dashboard does not run an independent background monitoring loop.
-
----
-
-# Request-Driven Timeline
-
-```text
-Browser request
-      │
-      ▼
-   Sample A
-      │
-      ▼
-wait ~1 second
-      │
-      ▼
-Browser request
-      │
-      ▼
-   Sample B
-      │
-      ▼
-wait ~1 second
-      │
-      ▼
-Browser request
-      │
-      ▼
-   Sample C
-```
-
-The browser determines when samples are generated.
-
----
-
-# Why Use Request-Driven Monitoring Initially?
-
-It is simpler to build and understand.
-
-It avoids introducing:
-
-* worker threads
-* background processes
-* services
-* queues
-* database persistence
-* worker lifecycle management
-
-at the same time as learning Django and frontend communication.
-
-For the current stage, this allows development to focus on:
-
-```text
-collect
-    ↓
-sample
-    ↓
-serve JSON
-    ↓
-visualise
-```
-
----
-
-# Request-Driven Limitations
-
-There are several limitations.
-
-## No Browser Means No Monitoring
-
-```text
-dashboard closed
-    ↓
-no API requests
-    ↓
-no sampling
-```
-
----
-
-## Restarting Django Loses History
+# Restarting Django Loses History
 
 Current history exists in RAM.
 
@@ -1533,79 +1395,39 @@ history disappears
 
 ---
 
-## Multiple Clients Are More Complicated
+## Multiple Clients
 
-Suppose two browser tabs request:
-
-```text
-/api/system/
-```
-
-They share the same:
+Multiple tabs can poll the APIs without causing extra collection passes. They all read the same latest sample.
 
 ```text
-MonitoringService
-SystemSampler
-MonitorHistory
+                    latest sample
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+        Browser tab A          Browser tab B
 ```
-
-This is why synchronization matters.
-
----
 
 # Shared Monitoring State
 
-The service currently owns shared mutable state:
-
-```text
-MonitoringService
-│
-├── sampler
-│   ├── previous_disk
-│   └── previous_network
-│
-├── history
-├── previous_time
-└── is_primed
-```
-
-If two requests modified this simultaneously, calculations could become inconsistent.
-
----
-
-# Locking Architecture
-
-The service therefore uses a thread lock.
+The service owns mutable state such as the latest sample, rolling history, worker lifecycle and sampler counters. A re-entrant lock (`RLock`) protects publication and copying of this state.
 
 ```mermaid
 sequenceDiagram
-    participant A as Request A
+    participant Worker as Background worker
     participant Lock
-    participant Service
-    participant B as Request B
+    participant State as Shared state
+    participant API as API request
 
-    A->>Lock: acquire()
-    Lock-->>A: granted
+    Worker->>Lock: acquire
+    Worker->>State: publish latest sample
+    Worker->>Lock: release
 
-    A->>Service: take sample
-
-    B->>Lock: acquire()
-    Note over B,Lock: waits
-
-    Service-->>A: sample complete
-
-    A->>Lock: release()
-
-    Lock-->>B: granted
-
-    B->>Service: take sample
-
-    Service-->>B: sample complete
-
-    B->>Lock: release()
+    API->>Lock: acquire
+    API->>State: copy latest data
+    API->>Lock: release
 ```
 
-This ensures one operation updates the sampling state at a time.
+The API works with copied data after releasing the lock, keeping contention short.
 
 ---
 
@@ -1667,7 +1489,7 @@ SystemSampler
    ↓
 MonitorHistory
    ↓
-MonitoringService
+BackgroundMonitoringService
    ↓
 Django View
    ↓
@@ -1879,7 +1701,7 @@ flowchart TD
     end
 
     subgraph Django["Django Web Layer"]
-        SERVICE["MonitoringService"]
+        SERVICE["BackgroundMonitoringService"]
         VIEW["Views"]
         API["/api/system/"]
     end
@@ -1928,7 +1750,7 @@ flowchart TD
 flowchart LR
     B["Browser"]
     D["Django"]
-    MS["MonitoringService"]
+    MS["BackgroundMonitoringService"]
     SS["SystemSampler"]
     C["Collectors"]
     W["Windows"]
@@ -1996,60 +1818,53 @@ Django views primarily deal with HTTP rather than implementing monitoring calcul
 
 # Current Architectural Limitations
 
-The current design is intentionally an early version.
+The background sampler removes browser-driven collection, but the design is still intentionally local and lightweight. Important limitations include:
 
-Important limitations include:
-
-* monitoring is request-driven
-* the browser effectively controls web sampling
-* no independent monitoring daemon exists
-* history is stored only in RAM
+* the worker thread lives inside the Django Python process
+* stopping/restarting Django stops the worker and clears in-memory history
+* multiple separate Django processes would not share the same latest sample/history
 * no persistent telemetry database exists
-* multiple Django processes would not share the same in-memory history
-* monitoring state currently lives inside the Django process
 * no message queue exists
 * no WebSocket streaming exists
-* the browser polls the API
+* the browser still polls the APIs to receive updates
 * no authentication exists
 * no long-term historical query layer exists
 
-These are not necessarily errors.
-
-They represent the current stage of the project.
+These are appropriate trade-offs for the current local application.
 
 ---
 
 # Evolution Path
 
-The architecture has intentionally been built so it can evolve gradually.
-
 Current:
 
 ```text
-Request
-   ↓
-Sample
-   ↓
-Memory history
-   ↓
-Response
-```
-
-A later version might become:
-
-```text
-Background monitor
-       ↓
-Continuous samples
-       ↓
-Live buffer + database
-       ↓
-API
-       ↓
+Django process
+    ↓
+background sampling thread
+    ↓
+latest sample + in-memory history
+    ↓
+APIs
+    ↓
 Dashboard
 ```
 
-The collectors and much of `SystemSampler` could remain reusable through that transition.
+A later version may move collection outside Django and add persistence:
+
+```text
+Dedicated monitor process / Windows service
+        ↓
+Continuous samples
+        ↓
+Live buffer + historical database
+        ↓
+Django API
+        ↓
+Dashboard + analytics
+```
+
+The collectors and `SystemSampler` remain reusable through that transition.
 
 ---
 
@@ -2066,9 +1881,11 @@ Collectors
     ↓
 SystemSampler
     ↓
-MonitorHistory
-    ↓
-Interfaces
+BackgroundMonitoringService
+    ├── latest sample
+    └── MonitorHistory
+            ↓
+         Interfaces
 ```
 
 The terminal interface directly consumes the monitoring layer.
@@ -2076,7 +1893,7 @@ The terminal interface directly consumes the monitoring layer.
 The web interface introduces:
 
 ```text
-MonitoringService
+BackgroundMonitoringService
     ↓
 Django
     ↓
@@ -2087,16 +1904,18 @@ JavaScript
 Chart.js
 ```
 
-The most important current architectural characteristic is that the Django system is **request-driven**:
+The most important current architectural characteristic is that sampling is now **independent of browser requests**:
 
 ```text
-Browser request
+Background worker
     ↓
 monitoring sample
     ↓
-JSON response
+shared latest state
+    ↓
+JSON APIs read that state
 ```
 
-This keeps the first version simple while preserving clean enough module boundaries to support a more independent monitoring architecture later.
+This gives the web application one consistent sampling stream while preserving clean module boundaries for a later dedicated monitoring process or Windows service.
 
 The next document, `api.md`, describes the HTTP API boundary in detail, including the current `/api/system/` endpoint, response structure, field meanings, units, example responses and how the frontend consumes the API.

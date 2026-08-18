@@ -63,9 +63,14 @@ python -m src.monitor
 
 ### Monitoring History
 
+- Continuous background sampling in a dedicated Python thread
+- Shared latest sample used by both monitoring APIs
+
 The monitor keeps the most recent 60 system samples in memory.
 
 With a sampling interval of approximately one second, this represents roughly the last 60 seconds of system activity.
+
+The Django web monitor now collects these samples continuously in a background thread, so history continues to advance while the browser is closed as long as the Django process is running.
 
 ### Interfaces
 
@@ -191,22 +196,20 @@ SystemSampler
    └── Creates system snapshots
    │
    ▼
-MonitorHistory
+BackgroundMonitoringService
    │
-   └── Stores latest 60 samples
+   ├── Background thread samples ~once/sec
+   ├── Latest complete sample
+   └── MonitorHistory (latest 60 lightweight samples)
    │
-   ├─────────────────────────────┐
-   ▼                             ▼
-Terminal Monitor          Django Dashboard
-monitor.py                       │
-                                 ▼
-                        MonitoringService
-                                 │
-                                 ▼
-                         /api/system/
-                                 │
-                                 ▼
-                           dashboard.js
+   ├──────────────────────────────┐
+   ▼                              ▼
+/api/system/                 /api/processes/
+   │                              │
+   └──────────── Django ──────────┘
+                 │
+                 ▼
+              Browser
                                  │
                       ┌──────────┴─────────┐
                       ▼                    ▼
@@ -219,7 +222,7 @@ The same monitoring engine can eventually be used by:
 
 - the terminal application
 - the Django web dashboard
-- background monitoring
+- continuous background monitoring
 - database storage
 - other applications or APIs
 
@@ -486,7 +489,7 @@ Browser
 Django view
    │
    ▼
-MonitoringService
+BackgroundMonitoringService
    │
    ▼
 SystemSampler
@@ -503,7 +506,7 @@ dashboard.js
 
 ---
 
-# MonitoringService
+# BackgroundMonitoringService
 
 The Django monitoring service lives in:
 
@@ -511,18 +514,17 @@ The Django monitoring service lives in:
 src/dashboard/services.py
 ```
 
-It provides a bridge between Django and the monitoring engine.
+It now owns the live web-monitoring lifecycle. It contains:
 
-It owns:
+- one `SystemSampler`
+- one `MonitorHistory`
+- the latest complete sample
+- a background sampling thread
+- thread-safe events and locking
 
-- a `SystemSampler`
-- a `MonitorHistory`
-- previous timing state
-- a thread lock
+The background thread samples the PC approximately once per second even when no browser tab is open. `/api/system/` and `/api/processes/` no longer trigger their own collection passes; they read different views of the same latest sample.
 
-The lock prevents multiple HTTP requests from modifying the sampler's shared state at the same time.
-
-The service converts Python monitoring samples into data that can safely be returned as JSON.
+The service keeps the complete process list only in the latest sample, while rolling history stores smaller historical snapshots so that hundreds of process objects are not duplicated 60 times.
 
 ---
 
@@ -655,11 +657,9 @@ The application is still an early version.
 
 Current limitations include:
 
-- monitoring only runs when samples are requested
 - history exists only in memory
 - history is limited to 60 samples
 - no persistent database history
-- no background monitoring service
 - no authentication
 - no process management actions
 - no GPU monitoring
@@ -684,7 +684,6 @@ Possible later additions:
 
 - persistent monitoring history
 - SQLite/PostgreSQL storage
-- background monitoring
 - Windows service mode
 - GPU monitoring
 - disk-per-device monitoring
