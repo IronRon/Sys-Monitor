@@ -67,6 +67,20 @@ python -m src.monitor
 - Best-effort asynchronous reverse-DNS hostname lookup
 - Search, protocol filtering and remote-only connection filtering
 
+### Sys Monitor Self-Overhead
+
+- Measures the CPU and RAM used by the Python/Django Sys Monitor backend itself
+- Calculates backend read/write I/O rates from cumulative process I/O counters
+- Shows thread count, Windows handle count, process uptime and child-process count
+- Reuses the existing network socket snapshot to count sockets owned by the Sys Monitor PID
+- Measures how long one complete monitoring sample takes in milliseconds
+- Keeps a lightweight 60-sample self-overhead history
+- Exposes the read-only `/api/self/` endpoint
+- Displays a reusable floating **Sys Monitor Cost** widget across the monitoring pages
+- Polls the widget every two seconds so observing the monitor adds only a small amount of extra request overhead
+
+The current self-overhead values describe the **Python/Django backend process**. Browser rendering cost from Chrome, Chart.js or Cytoscape is not included.
+
 ### Static Hardware Identification
 
 - Windows-discovered CPU model, core counts, reported clock and cache
@@ -113,7 +127,8 @@ The project currently provides:
 5. A dedicated Django Memory page
 6. A dedicated Django Disk page
 7. A dedicated Django Network page
-8. A Django documentation area
+8. A reusable Sys Monitor self-overhead widget across the monitoring pages
+9. A Django documentation area
 
 The web dashboard currently displays:
 
@@ -146,6 +161,8 @@ The dedicated Memory page under `/memory/` combines the shared live sample strea
 The dedicated Disk page under `/disk/` displays C: filesystem capacity, current read/write throughput, a 60-second I/O history graph and cached physical-drive information such as SSD/NVMe type, capacity and health. It deliberately distinguishes **storage capacity** from **disk activity**, and **filesystem volumes** from **physical drives**.
 
 The dedicated Network page under `/network/` displays live download/upload throughput, a 60-second traffic graph, detected network interfaces and a searchable current socket table. Connections show protocol, IPv4/IPv6 family, local and remote endpoints, TCP state, owning process/PID where available, and best-effort reverse-DNS hostnames. This is **connection/socket inspection**, not packet or HTTP-content capture.
+
+The reusable **Sys Monitor Cost** widget displays the resource cost of the Python/Django backend itself. It shows normalised whole-machine CPU share, resident/working-set memory, process read/write I/O rates, sampling duration, threads, handles, sockets and PID. The values come from the same background sampling stream rather than a second monitoring loop.
 
 The documentation area renders the Markdown files in `docs/` as web pages under `/docs/`, including Mermaid diagrams.
 
@@ -184,7 +201,8 @@ Sys_Monitor/
     │   ├── disk.py
     │   ├── network.py
     │   ├── processes.py
-    │   └── hardware.py
+    │   ├── hardware.py
+    │   └── self_monitor.py
     │
     ├── hardware/
     │   ├── normalizer.py
@@ -705,7 +723,7 @@ Current limitations include:
 - no GPU performance monitoring
 - disk capacity is currently centred on the C: filesystem while physical-drive identity comes from the hardware service
 - no per-process or per-device live disk I/O breakdown yet
-- no packet capture or protocol-payload inspection yet
+- packet capture / protocol-payload inspection is intentionally out of scope for the current version
 - current socket data does not directly attribute byte throughput to individual processes
 - reverse-DNS hostnames are best-effort and may be unavailable
 - no persistent historical graphs beyond the in-memory 60-sample window
@@ -719,10 +737,9 @@ These limitations are expected to change as the project develops.
 
 Near-term development:
 
-- optional packet-capture / protocol-inspection Network v2
 - richer process details and diagnostics
 - navigation/layout cleanup as more pages are added
-- self-monitoring overhead and historical analytics
+- persistent history and historical analytics
 
 Possible later additions:
 
@@ -732,7 +749,6 @@ Possible later additions:
 - Windows service mode
 - GPU monitoring
 - disk-per-device monitoring
-- packet capture with Npcap/TShark
 - per-process network byte attribution
 - Wi-Fi signal/channel diagnostics
 - process disk activity
