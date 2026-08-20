@@ -12,6 +12,8 @@
 
     <link rel="stylesheet" href="{% static 'dashboard/css/dashboard.css' %}">
 
+    <link rel="stylesheet" href="{% static 'dashboard/css/self_overhead.css' %}">
+
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 </head>
 
@@ -283,6 +285,10 @@
 
 
     <script src="{% static 'dashboard/js/dashboard.js' %}"></script>
+
+    {% include "dashboard/_self_overhead.html" %}
+
+    <script src="{% static 'dashboard/js/self_overhead.js' %}"></script>
 
 </body>
 

@@ -122,3 +122,14 @@ def network_api(request):
         monitoring_service
         .get_network_data()
     )
+
+def self_monitor_api(request):
+
+    data = (
+        monitoring_service
+        .get_self_data()
+    )
+
+    return JsonResponse(
+        data
+    )

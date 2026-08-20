@@ -71,4 +71,10 @@ urlpatterns = [
         views.network_api,
         name="network-api",
     ),
+
+    path(
+        "api/self/",
+        views.self_monitor_api,
+        name="self-monitor-api",
+    ),
 ]

@@ -37,9 +37,10 @@ Current routes:
 | `GET` | `/api/memory/` | Retrieve current memory data, memory history and top memory processes |
 | `GET` | `/api/disk/` | Retrieve current disk data and read/write history |
 | `GET` | `/api/network/` | Retrieve throughput history, interfaces and current sockets |
+| `GET` | `/api/self/` | Retrieve the Sys Monitor backend's current overhead and short self-history |
 | `GET` | `/api/hardware/` | Retrieve cached static hardware identity and explanations |
 
-`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/`, `/api/network/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
+`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/`, `/api/network/`, `/api/self/` and `/api/hardware/` are the current **API endpoints** because they return machine-readable JSON.
 
 The project also has normal Django HTML routes such as `/`, `/processes/`, `/hardware/`, `/memory/`, `/disk/`, `/network/` and `/docs/.../`. These return web pages rather than API data.
 
@@ -2132,6 +2133,48 @@ The rolling history stores only download/upload rates; the complete socket list 
 
 ---
 
+
+# `GET /api/self/`
+
+## Purpose
+
+Returns a read-only view of the resource overhead of the Python/Django Sys Monitor backend itself.
+
+No new psutil collection happens when this endpoint is requested. The values already exist in `latest_sample.self_monitor`, produced by the shared background sampler.
+
+The response includes backend PID, normalised whole-machine CPU share, raw psutil process CPU, resident/working-set memory, process read/write I/O rates, thread count, Windows handle count when available, child-process count, process uptime, current socket counts, sampling-cycle duration and a lightweight 60-sample self-overhead history.
+
+Example shape:
+
+```json
+{
+    "timestamp": "...",
+    "overhead": {
+        "pid": 18424,
+        "cpu_percent": 0.65,
+        "raw_cpu_percent": 13.0,
+        "memory_bytes": 157286400,
+        "memory_percent": 0.46,
+        "read_bytes_per_second": 10240.0,
+        "write_bytes_per_second": 4096.0,
+        "thread_count": 12,
+        "handle_count": 611,
+        "child_process_count": 0,
+        "uptime_seconds": 347.2,
+        "network_socket_count": 2,
+        "remote_socket_count": 0,
+        "listening_socket_count": 1,
+        "sample_duration_ms": 19.4
+    },
+    "history": []
+}
+```
+
+The endpoint measures **backend overhead only**. CPU or RAM used by the browser to render Chart.js, Cytoscape or the DOM belongs to the browser process and is not included.
+
+The floating frontend widget polls this endpoint every two seconds rather than every one second to reduce the observer effect.
+
+---
 
 # `GET /api/hardware/`
 

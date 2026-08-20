@@ -358,6 +358,37 @@ class BackgroundMonitoringService:
                 "count":
                     sample["processes"]["count"],
             },
+
+            "self_monitor": {
+                "cpu_percent":
+                    sample[
+                        "self_monitor"
+                    ]["cpu_percent"],
+
+                "memory_bytes":
+                    sample[
+                        "self_monitor"
+                    ]["memory_bytes"],
+
+                "read_bytes_per_second":
+                    sample[
+                        "self_monitor"
+                    ][
+                        "read_bytes_per_second"
+                    ],
+
+                "write_bytes_per_second":
+                    sample[
+                        "self_monitor"
+                    ][
+                        "write_bytes_per_second"
+                    ],
+
+                "sample_duration_ms":
+                    sample[
+                        "self_monitor"
+                    ]["sample_duration_ms"],
+            },
         }
 
 
@@ -751,6 +782,79 @@ class BackgroundMonitoringService:
                 }
 
                 for item in history
+            ],
+        }
+
+    def get_self_data(self):
+        """
+        Return the overhead of the Sys Monitor
+        backend itself.
+
+        No new psutil collection happens here.
+        """
+
+        sample, history = (
+            self._get_snapshot()
+        )
+
+
+        return {
+            "timestamp":
+                sample["timestamp"]
+                .isoformat(),
+
+            "overhead":
+                sample[
+                    "self_monitor"
+                ],
+
+            "system": {
+                "cpu_percent":
+                    sample["cpu"][
+                        "percent"
+                    ],
+
+                "total_memory_bytes":
+                    sample["memory"][
+                        "total_bytes"
+                    ],
+            },
+
+            "history": [
+                {
+                    "timestamp":
+                        item[
+                            "timestamp"
+                        ].isoformat(),
+
+                    "cpu_percent":
+                        item[
+                            "self_monitor"
+                        ][
+                            "cpu_percent"
+                        ],
+
+                    "memory_bytes":
+                        item[
+                            "self_monitor"
+                        ][
+                            "memory_bytes"
+                        ],
+
+                    "sample_duration_ms":
+                        item[
+                            "self_monitor"
+                        ][
+                            "sample_duration_ms"
+                        ],
+                }
+
+                for item in history
+
+                if (
+                    "self_monitor"
+                    in item
+                )
             ],
         }
 

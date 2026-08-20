@@ -2001,6 +2001,66 @@ Each layer performs a different transformation.
 ---
 
 
+# Self-Monitoring the Monitor
+
+The background sampler now measures the cost of running Sys Monitor itself. This is integrated into the **existing** one-second sampling cycle rather than creating a second independent monitoring loop.
+
+```mermaid
+flowchart TD
+    PY["Python / Django process"] --> SELF["SelfMonitorCollector"]
+    SELF --> SAMPLER["SystemSampler"]
+    SAMPLER --> LATEST["latest_sample.self_monitor"]
+    SAMPLER --> HISTORY["lightweight 60-sample self history"]
+    LATEST --> API["/api/self/"]
+    HISTORY --> API
+    API --> WIDGET["Sys Monitor Cost widget"]
+```
+
+`SelfMonitorCollector.prime()` establishes CPU and I/O baselines before normal sampling begins. Each later collection reads the backend process's CPU, resident memory, cumulative I/O counters, thread count, handle count and uptime.
+
+The process CPU value is stored in two forms:
+
+```text
+raw_cpu_percent
+    → psutil's process CPU interpretation
+
+cpu_percent
+    → raw value divided by logical-processor count
+    → approximate share of whole-machine CPU capacity
+```
+
+Process I/O uses the same stateful delta/rate idea as disk and network throughput:
+
+```text
+cumulative process I/O counters
+        ↓
+current - previous
+        ↓
+delta bytes
+        ↓
+÷ elapsed seconds
+        ↓
+read/write bytes per second
+```
+
+`SystemSampler` also records `sample_duration_ms` using `time.perf_counter()`. This measures how long one complete monitoring cycle took in wall-clock time.
+
+The Network collector has already produced a socket list for the current sample, so the self-monitor feature reuses that data and counts sockets whose PID matches the Sys Monitor process. It does **not** run a second `net_connections()` scan.
+
+The rolling history deliberately stores only a small self-overhead subset: CPU percentage, RAM bytes, read/write I/O rates and sample duration. This keeps the 60-sample buffer compact.
+
+## Backend Scope
+
+The current self monitor measures the Python/Django backend process. Browser rendering cost is outside this measurement because Chart.js, Cytoscape and DOM rendering execute in the browser process.
+
+## Observer Effect
+
+Monitoring is not free. Reading `/api/self/`, rendering the widget and collecting the self metrics all consume a small amount of resources themselves. This is an example of the **observer effect**: observing a system can slightly change the system being observed.
+
+Sys Monitor limits this effect by collecting self metrics inside the existing sampling cycle, making `/api/self/` read an existing snapshot instead of calling psutil again, and polling the floating widget every two seconds rather than every second.
+
+---
+
 # Dedicated Memory, Disk and Network Views
 
 The background sampler now supports dedicated resource pages without creating additional collection loops. `BackgroundMonitoringService` exposes:
@@ -2011,7 +2071,7 @@ The background sampler now supports dedicated resource pages without creating ad
 /api/network/
 ```
 
-Both endpoints read the same latest sample and rolling history already maintained for the rest of the application.
+These endpoints read the same latest sample and rolling history already maintained for the rest of the application.
 
 ```mermaid
 flowchart TD

@@ -69,11 +69,13 @@ src/dashboard/
 │
 ├── templates/
 │   └── dashboard/
+│       ├── _self_overhead.html
 │       ├── index.html
 │       ├── processes.html
 │       ├── hardware.html
 │       ├── memory.html
-│       └── disk.html
+│       ├── disk.html
+│       └── network.html
 │
 └── static/
     └── dashboard/
@@ -105,6 +107,7 @@ src/documentation/
 ├── templates/
 │   └── documentation/
 │       ├── base.html
+│       ├── _self_overhead.html
 │       ├── index.html
 │       └── page.html
 └── static/
@@ -1593,6 +1596,38 @@ Reverse-DNS names are treated as optional enrichment. The table remains useful w
 
 ---
 
+# Floating Sys Monitor Cost Widget
+
+The monitoring pages now include a reusable Django partial:
+
+```text
+src/dashboard/templates/dashboard/_self_overhead.html
+```
+
+Each page includes it with:
+
+```django
+{% include "dashboard/_self_overhead.html" %}
+```
+
+The widget is styled by `self_overhead.css` and updated by `self_overhead.js`. This avoids maintaining separate copies of the same markup and behaviour on Overview, Processes, Hardware, Memory, Disk and Network.
+
+The widget displays backend CPU percentage, backend RAM usage, process read/write I/O rates, sampling-cycle duration, thread count, Windows handle count, current socket count, backend PID and last-updated time. It can be collapsed with the `− / +` button and is positioned as a floating card.
+
+```mermaid
+flowchart LR
+    API["/api/self/"] --> JS["self_overhead.js"]
+    PARTIAL["_self_overhead.html"] --> WIDGET["Floating widget"]
+    CSS["self_overhead.css"] --> WIDGET
+    JS --> WIDGET
+```
+
+`self_overhead.js` polls every two seconds. The slower refresh is intentional: the self-monitoring UI itself creates requests and rendering work, so polling less frequently reduces the extra work caused by observing the monitor.
+
+The card measures **backend cost only**. A visually expensive browser feature such as the Cytoscape process graph may increase Chrome's resource use without increasing the Python/Django values by the same amount.
+
+---
+
 # Current Limitations
 
 The frontend is intentionally still simple.
@@ -1603,7 +1638,7 @@ Current limitations include:
 * process details are currently limited to name, PID, PPID, CPU and memory
 * memory does not yet expose Windows-specific cache/standby, pool or page-fault counters
 * disk does not yet attribute live I/O to individual processes or physical devices
-* network inspection is socket-level only; no packet/payload capture yet
+* network inspection intentionally remains socket-level; packet/payload capture is outside the current frontend scope
 * network throughput is not yet attributed directly to each process
 * no user-selectable refresh rate
 * no persistent chart history
@@ -1615,13 +1650,13 @@ Current limitations include:
 
 # Planned Frontend Development
 
-Near-term frontend work can now focus on packet-inspection Network v2, self-monitoring overhead, historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
+Near-term frontend work can now focus on persistent historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
 
 ---
 
 # Current Frontend Architecture
 
-The project now has seven main browser-facing areas: the overview dashboard, Processes page, Hardware / About My PC page, Memory page, Disk page, Network page and documentation site.
+The project now has seven main browser-facing areas: the overview dashboard, Processes page, Hardware / About My PC page, Memory page, Disk page, Network page and documentation site. A reusable Sys Monitor Cost widget is shared across the monitoring pages rather than being a separate full page.
 
 ```mermaid
 flowchart TD

@@ -1242,7 +1242,70 @@ current throughput
 
 ## Connection Inspection vs Packet Capture
 
-The current Network page inspects operating-system **sockets/connections**. It does not yet capture individual packets or decode HTTP/TLS application payloads. Packet capture is a separate, higher-frequency monitoring problem and will require a dedicated capture worker rather than the one-second `SystemSampler`.
+The current Network page inspects operating-system **sockets/connections**. Packet/payload capture is intentionally outside the current project scope; the Network page focuses on interfaces, endpoints, protocols, connection state and process ownership.
+
+---
+
+# Self-Monitoring Concepts
+
+## Self-Observation
+
+A monitoring application can measure its own resource usage just like it measures another process. Sys Monitor creates a `psutil.Process` for its own Python PID using `os.getpid()` and samples that process during the normal background monitoring cycle.
+
+## Raw Process CPU vs Whole-Machine Share
+
+Psutil process CPU percentages can exceed `100%` when one process uses multiple logical processors. Sys Monitor therefore keeps the raw process CPU value and also divides it by the machine's logical-processor count to estimate the process's share of total machine CPU capacity.
+
+```text
+raw process CPU = 20%
+logical processors = 20
+
+20 / 20 = 1%
+
+≈ 1% of whole-machine CPU capacity
+```
+
+## RSS / Working Set
+
+RSS means **Resident Set Size**. It describes memory pages for a process that are currently resident in physical RAM. On Windows this is closely related to the process working set. The self-overhead widget uses this as the backend's current RAM cost.
+
+## Process I/O Counters
+
+Process I/O counters are cumulative. They are converted to rates by subtracting an earlier observation and dividing by elapsed time. These counters are broader than direct physical-disk traffic because operating-system buffering and caching can affect where I/O is actually serviced.
+
+## Thread
+
+A thread is an execution path within a process. The Django process can contain multiple threads, including server work, the background sampler and DNS resolver workers.
+
+## Windows Handle
+
+A Windows **handle** is a process-local reference to an operating-system object such as a file, registry key, event, process or thread. Handle count is a useful high-level indicator of how many OS resources a process currently references.
+
+## Sampling Duration
+
+`sample_duration_ms` measures the wall-clock time taken by one complete monitoring cycle using `time.perf_counter()`. It is useful for understanding collector cost, but it is not identical to CPU usage because wall-clock duration can include waiting or kernel activity.
+
+## Observer Effect
+
+The **observer effect** means that measuring a system can itself alter the system being measured.
+
+```text
+browser requests /api/self/
+        ↓
+Django handles the request
+        ↓
+request handling consumes a small amount of resources
+        ↓
+the next self measurement may include some of that work
+```
+
+Sys Monitor reduces this effect by reusing the existing background sample, avoiding a separate self-monitoring loop and polling the widget every two seconds.
+
+## Measurement Boundary
+
+The self-overhead feature currently measures the **Python/Django backend process**. Browser rendering happens in Chrome or another browser process, so the cost of Chart.js, Cytoscape and DOM rendering is not part of the backend number.
+
+This is a useful example of defining a **measurement boundary**: before interpreting a performance number, know exactly which process or subsystem that number represents.
 
 ---
 

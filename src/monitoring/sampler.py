@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 
 import psutil
 
@@ -17,12 +18,18 @@ from collectors.network import (
     get_network_connections,
     get_network_interfaces,
 )
+from collectors.self_monitor import (
+    SelfMonitorCollector,
+)
 
 class SystemSampler:
     def __init__(self):
         self.previous_disk = None
         self.previous_network = None
         self.previous_interface_counters = None
+        self.self_monitor = (
+            SelfMonitorCollector()
+        )
 
     def prime(self):
         """
@@ -46,10 +53,17 @@ class SystemSampler:
             get_interface_counters()
         )
 
+        # Prime Sys Monitor's own CPU/I/O.
+        self.self_monitor.prime()
+
     def sample(self, elapsed_seconds):
         """
         Take one complete system sample.
         """
+
+        sample_started = (
+            time.perf_counter()
+        )
 
         cpu = get_cpu_usage()
         memory = get_memory_usage()
@@ -141,6 +155,69 @@ class SystemSampler:
             )
         )
 
+        self_metrics = (
+            self.self_monitor.collect(
+                elapsed_seconds
+            )
+        )
+
+        self_pid = (
+            self_metrics["pid"]
+        )
+
+
+        self_connections = [
+            connection
+
+            for connection in connections
+
+            if connection["pid"]
+            == self_pid
+        ]
+
+
+        self_metrics[
+            "network_socket_count"
+        ] = len(
+            self_connections
+        )
+
+
+        self_metrics[
+            "remote_socket_count"
+        ] = sum(
+            1
+
+            for connection
+            in self_connections
+
+            if connection["remote"]
+        )
+
+
+        self_metrics[
+            "listening_socket_count"
+        ] = sum(
+            1
+
+            for connection
+            in self_connections
+
+            if connection["status"]
+            == "LISTEN"
+        )
+
+        self_metrics[
+            "sample_duration_ms"
+        ] = (
+            (
+                time.perf_counter()
+                -
+                sample_started
+            )
+            * 1000
+        )
+
         sample = {
             "timestamp": datetime.now(),
 
@@ -223,6 +300,8 @@ class SystemSampler:
                 "top_memory": top_memory_processes,
                 "items": processes,
             },
+
+            "self_monitor": self_metrics,
         }
 
         self.previous_disk = disk

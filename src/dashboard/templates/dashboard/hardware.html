@@ -15,6 +15,9 @@
 
     <link rel="stylesheet" href="{% static 'dashboard/css/hardware.css' %}">
 
+    <link rel="stylesheet" href="{% static 'dashboard/css/self_overhead.css' %}">
+
+
 </head>
 
 
@@ -589,6 +592,10 @@
 
 
     <script src="{% static 'dashboard/js/hardware.js' %}"></script>
+
+    {% include "dashboard/_self_overhead.html" %}
+
+    <script src="{% static 'dashboard/js/self_overhead.js' %}"></script>
 
 </body>
 

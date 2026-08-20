@@ -15,6 +15,8 @@
 
     <link rel="stylesheet" href="{% static 'dashboard/css/processes.css' %}">
 
+    <link rel="stylesheet" href="{% static 'dashboard/css/self_overhead.css' %}">
+
 </head>
 
 
@@ -306,6 +308,10 @@
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@4.0.0/dist/cytoscape-dagre.js"></script>
 
     <script src="{% static 'dashboard/js/processes.js' %}"></script>
+
+    {% include "dashboard/_self_overhead.html" %}
+
+    <script src="{% static 'dashboard/js/self_overhead.js' %}"></script>
 
 </body>
 

@@ -130,7 +130,8 @@ Sys_Monitor/
     │   ├── disk.py
     │   ├── network.py
     │   ├── processes.py
-    │   └── hardware.py
+    │   ├── hardware.py
+    │   └── self_monitor.py
     │
     ├── hardware/
     │   ├── __init__.py
@@ -149,11 +150,13 @@ Sys_Monitor/
     │   │
     │   ├── templates/
     │   │   └── dashboard/
+    │   │       ├── _self_overhead.html
     │   │       ├── index.html
     │   │       ├── processes.html
     │   │       ├── hardware.html
     │   │       ├── memory.html
-    │   │       └── disk.html
+    │   │       ├── disk.html
+    │   │       └── network.html
     │   │
     │   └── static/
     │       └── dashboard/
@@ -162,13 +165,17 @@ Sys_Monitor/
     │           │   ├── processes.css
     │           │   ├── hardware.css
     │           │   ├── memory.css
-    │           │   └── disk.css
+    │           │   ├── disk.css
+    │           │   ├── network.css
+    │           │   └── self_overhead.css
     │           └── js/
     │               ├── dashboard.js
     │               ├── processes.js
     │               ├── hardware.js
     │               ├── memory.js
-    │               └── disk.js
+    │               ├── disk.js
+    │               ├── network.js
+    │               └── self_overhead.js
     │
     ├── config/
     │   ├── settings.py
@@ -1188,6 +1195,54 @@ HardwareService
 The explanation layer derives generic educational text from detected properties instead of hard-coding a paragraph for every possible CPU, GPU, RAM or disk model.
 
 ---
+# Self-Overhead Architecture
+
+Self-monitoring is deliberately integrated with the shared monitoring pipeline.
+
+```mermaid
+flowchart TD
+    PROC["Python / Django backend process"]
+    SELF["SelfMonitorCollector"]
+    SAMPLER["SystemSampler"]
+    SAMPLE["latest_sample.self_monitor"]
+    HISTORY["MonitorHistory self subset"]
+    API["GET /api/self/"]
+    PARTIAL["_self_overhead.html"]
+    JS["self_overhead.js"]
+    WIDGET["Floating Sys Monitor Cost widget"]
+
+    PROC --> SELF
+    SELF --> SAMPLER
+    SAMPLER --> SAMPLE
+    SAMPLER --> HISTORY
+    SAMPLE --> API
+    HISTORY --> API
+    API --> JS
+    PARTIAL --> WIDGET
+    JS --> WIDGET
+```
+
+The feature introduces three reusable pieces:
+
+```text
+collectors/self_monitor.py
+    → process-level backend measurements
+
+/api/self/
+    → read-only view of already sampled self-overhead data
+
+_self_overhead.html + self_overhead.css/js
+    → reusable widget included by monitoring pages
+```
+
+`SystemSampler` remains the single owner of live collection. The self-overhead API therefore does not create another psutil sampling path.
+
+The current measurement boundary is the **Python/Django backend process**. Browser-side rendering is a separate process boundary and is intentionally excluded. This matters especially on the Processes Graph page, where Cytoscape rendering load belongs to the browser rather than the backend.
+
+The self-monitor section also reuses the current Network socket list to count sockets owned by the Sys Monitor PID. This avoids another expensive system-wide socket enumeration.
+
+---
+
 # Dedicated Memory, Disk and Network Pages
 
 The Memory and Disk pages are specialised views over the same background telemetry stream used by the overview dashboard. They do not own new samplers.

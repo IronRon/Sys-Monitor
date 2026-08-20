@@ -28,7 +28,8 @@ collectors/
 ├── memory.py
 ├── disk.py
 ├── network.py
-└── processes.py
+├── processes.py
+└── self_monitor.py
 ```
 
 Each collector focuses on one area of the operating system.
@@ -44,6 +45,7 @@ flowchart TD
     Psutil --> Disk[Disk Collector]
     Psutil --> Network[Network Collector]
     Psutil --> Processes[Process Collector]
+    Psutil --> SelfMonitor[Self-Monitor Collector]
 
     Windows --> Hardware[Hardware Collector]
 
@@ -52,6 +54,7 @@ flowchart TD
     Disk --> Sampler
     Network --> Sampler
     Processes --> Sampler
+    SelfMonitor --> Sampler
 
     Hardware --> HardwareService[HardwareService]
 ```
@@ -1192,6 +1195,95 @@ Packet capture is intentionally reserved for a later Network iteration using a d
 
 ---
 
+# Self-Monitor Collector
+
+File:
+
+```text
+src/collectors/self_monitor.py
+```
+
+`SelfMonitorCollector` measures the resource cost of the Python process that is running the Sys Monitor backend itself.
+
+It is intentionally implemented as a **stateful class** rather than a stateless function because process CPU percentage and process I/O rates require earlier observations.
+
+Conceptually:
+
+```text
+Sys Monitor Python process
+        │
+        ├── CPU time
+        ├── resident / working-set memory
+        ├── cumulative process I/O counters
+        ├── threads
+        ├── Windows handles
+        └── process lifetime
+        │
+        ▼
+SelfMonitorCollector
+        │
+        ▼
+self_monitor sample
+```
+
+The collector owns a `psutil.Process` for:
+
+```python
+psutil.Process(os.getpid())
+```
+
+so it measures the currently running Python/Django backend process.
+
+## CPU
+
+`Process.cpu_percent(interval=None)` is primed once and then sampled non-blockingly. Psutil process CPU can exceed `100%` when a process uses more than one logical CPU, so Sys Monitor retains the raw value and also normalises it by the machine's logical-processor count:
+
+```text
+raw process CPU
+        ÷
+logical processor count
+        ↓
+approximate whole-machine CPU share
+```
+
+This makes the self-overhead CPU number comparable to the normalised process CPU percentages already used elsewhere in the project.
+
+## Memory
+
+The collector uses the process RSS / resident memory value and reports `memory_bytes` and `memory_percent`. On Windows this is closely related to the process working set: memory currently resident in physical RAM for the process.
+
+## Process I/O
+
+`Process.io_counters()` returns cumulative process I/O counters. The collector stores the previous values and converts the deltas into rates:
+
+```text
+current read_bytes - previous read_bytes
+────────────────────────────────────────
+elapsed seconds
+
+= read bytes / second
+```
+
+The same calculation is used for writes. These values are labelled **Read I/O** and **Write I/O** rather than physical-disk throughput because operating-system caching means process I/O counters do not necessarily equal direct SSD activity.
+
+## Other Process Metadata
+
+The collector also reports thread count, Windows handle count when available, recursive child-process count and process uptime.
+
+Socket counts are not collected by running another network query. `SystemSampler` reuses the socket list already collected for the Network page and counts the rows whose PID matches the Sys Monitor process.
+
+## Sampling Duration
+
+`SystemSampler` measures the wall-clock time taken by one complete monitoring cycle with `time.perf_counter()` and stores it as `sample_duration_ms` in the self-monitor section.
+
+This is useful for understanding how long a collection pass takes, but it is **not identical to CPU percentage**. A sample can include kernel work, waiting and other non-CPU time.
+
+## Scope
+
+The current collector measures the main Python/Django backend process. It does not include browser rendering cost from Chrome, Chart.js or Cytoscape. Child-process count is currently informational; child resource usage is not aggregated into the main CPU/RAM/I/O values.
+
+---
+
 # Process Collector
 
 File:
@@ -1843,7 +1935,7 @@ Current limitations include:
 ## Network
 
 * per-interface rates, addresses and adapter state are available, but no Wi-Fi signal/channel information
-* current socket inspection does not capture packets or application payloads
+* current Network monitoring intentionally remains at socket/connection level; packet capture is outside the current scope
 * no direct per-process byte-throughput attribution
 * some PID/connection details can be unavailable because of OS permissions or short-lived sockets
 * reverse-DNS names are enrichment data and may not resolve
@@ -1876,6 +1968,7 @@ collectors/
 ├── network.py
 ├── processes.py
 ├── hardware.py          # current static hardware identity
+├── self_monitor.py       # current backend overhead collector
 │
 ├── gpu.py               # possible live GPU metrics
 ├── services.py

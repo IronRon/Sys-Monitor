@@ -1,0 +1,236 @@
+.self-overhead-card {
+    position: fixed;
+
+    right: 20px;
+    bottom: 20px;
+
+    z-index: 1000;
+
+    width: 310px;
+
+    overflow: hidden;
+
+    border:
+        1px solid rgba(90, 210, 255, 0.18);
+
+    border-radius: 15px;
+
+    background:
+        rgba(10, 16, 27, 0.94);
+
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.38),
+        0 0 35px rgba(65, 190, 255, 0.07);
+
+    backdrop-filter: blur(18px);
+}
+
+
+.self-overhead-header {
+    display: flex;
+
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 13px 14px;
+
+    border-bottom:
+        1px solid rgba(255, 255, 255, 0.06);
+}
+
+
+.self-overhead-header>div {
+    display: flex;
+
+    align-items: center;
+
+    gap: 10px;
+}
+
+
+.self-overhead-header>div>div {
+    display: flex;
+
+    flex-direction: column;
+}
+
+
+.self-overhead-header span {
+    color: #b7c7dc;
+
+    font-size: 0.67rem;
+    font-weight: 800;
+
+    letter-spacing: 0.09em;
+}
+
+
+.self-overhead-header small {
+    margin-top: 2px;
+
+    color: #65758d;
+
+    font-size: 0.62rem;
+}
+
+
+.self-overhead-dot {
+    width: 8px;
+    height: 8px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background: #56ddaa;
+
+    box-shadow:
+        0 0 12px rgba(86, 221, 170, 0.75);
+}
+
+
+#self-overhead-toggle {
+    width: 26px;
+    height: 26px;
+
+    border: 0;
+
+    border-radius: 6px;
+
+    background:
+        rgba(255, 255, 255, 0.04);
+
+    color: #8190a7;
+
+    cursor: pointer;
+}
+
+
+#self-overhead-toggle:hover {
+    color: #ffffff;
+
+    background:
+        rgba(255, 255, 255, 0.07);
+}
+
+
+.self-overhead-body {
+    padding: 13px 14px;
+}
+
+
+.self-overhead-body.collapsed {
+    display: none;
+}
+
+
+.self-overhead-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 8px;
+}
+
+
+.self-overhead-grid>div {
+    padding: 10px;
+
+    border-radius: 9px;
+
+    background:
+        rgba(255, 255, 255, 0.025);
+}
+
+
+.self-overhead-grid span {
+    display: block;
+
+    color: #66778f;
+
+    font-size: 0.62rem;
+
+    text-transform: uppercase;
+}
+
+
+.self-overhead-grid strong {
+    display: block;
+
+    margin-top: 5px;
+
+    color: #edf5ff;
+
+    font-size: 0.92rem;
+
+    font-variant-numeric:
+        tabular-nums;
+}
+
+
+.self-overhead-details {
+    display: grid;
+
+    grid-template-columns:
+        repeat(2, minmax(0, 1fr));
+
+    gap: 6px;
+
+    margin-top: 10px;
+}
+
+
+.self-overhead-details span {
+    display: flex;
+
+    justify-content: space-between;
+
+    gap: 8px;
+
+    color: #627188;
+
+    font-size: 0.64rem;
+}
+
+
+.self-overhead-details strong {
+    color: #a8b9cf;
+
+    font-weight: 600;
+
+    font-variant-numeric:
+        tabular-nums;
+}
+
+
+.self-overhead-body footer {
+    display: flex;
+
+    justify-content: space-between;
+
+    margin-top: 11px;
+
+    padding-top: 9px;
+
+    border-top:
+        1px solid rgba(255, 255, 255, 0.05);
+
+    color: #596880;
+
+    font-size: 0.60rem;
+}
+
+
+@media (max-width: 600px) {
+
+    .self-overhead-card {
+        right: 12px;
+        bottom: 12px;
+
+        width:
+            min(310px,
+                calc(100vw - 24px));
+    }
+
+}
