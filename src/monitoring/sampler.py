@@ -1,4 +1,7 @@
-from datetime import datetime
+from datetime import (
+    datetime,
+    timezone,
+)
 import time
 
 import psutil
@@ -6,12 +9,6 @@ import psutil
 from collectors.cpu import get_cpu_usage
 from collectors.memory import get_memory_usage
 from collectors.disk import get_disk_usage
-from collectors.processes import (
-    prime_process_cpu,
-    get_processes,
-    get_top_cpu_processes,
-    get_top_memory_processes,
-)
 from collectors.network import (
     get_network_counters,
     get_interface_counters,
@@ -30,6 +27,9 @@ class SystemSampler:
         self.self_monitor = (
             SelfMonitorCollector()
         )
+        self.cached_network_connections = []
+        self.last_connection_refresh = None
+        self.connection_refresh_interval = 5.0
 
     def prime(self):
         """
@@ -40,9 +40,6 @@ class SystemSampler:
         # Prime system CPU.
         psutil.cpu_percent(interval=None)
         psutil.cpu_percent(interval=None, percpu=True)
-
-        # Prime individual process CPU measurements.
-        prime_process_cpu()
 
         # Establish baseline cumulative counters.
         self.previous_disk = get_disk_usage()
@@ -56,30 +53,54 @@ class SystemSampler:
         # Prime Sys Monitor's own CPU/I/O.
         self.self_monitor.prime()
 
-    def sample(self, elapsed_seconds):
+    def sample(
+        self,
+        elapsed_seconds,
+        processes=None,
+    ):
         """
         Take one complete system sample.
+
+        Process data is supplied by ProcessSnapshotWorker rather
+        than collected here. This keeps expensive Windows process
+        enumeration off the main one-second sampling path.
         """
+
+        if processes is None:
+            processes = []
 
         sample_started = (
             time.perf_counter()
         )
 
+        timings = {}
+
+        started = time.perf_counter()
         cpu = get_cpu_usage()
+        timings["cpu_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
+
+        started = time.perf_counter()
         memory = get_memory_usage()
+        timings["memory_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
+
+
+        started = time.perf_counter()
         disk = get_disk_usage()
-        network = (get_network_counters())
-        processes = get_processes()
+        timings["disk_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
 
-        top_cpu_processes = get_top_cpu_processes(
-            processes,
-            limit=5,
-        )
 
-        top_memory_processes = get_top_memory_processes(
-            processes,
-            limit=5,
-        )
+        started = time.perf_counter()
+        network = get_network_counters()
+        timings["network_counters_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
+
 
         disk_read_speed = max(
             disk["read_bytes"]
@@ -117,9 +138,11 @@ class SystemSampler:
             )
         )
 
-        interfaces = (
-            get_network_interfaces()
-        )
+        started = time.perf_counter()
+        interfaces = get_network_interfaces()
+        timings["interfaces_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
 
         for interface in interfaces:
 
@@ -149,17 +172,55 @@ class SystemSampler:
             for process in processes
         }
 
-        connections = (
-            get_network_connections(
-                process_name_by_pid
+        connection_time = time.monotonic()
+
+        should_refresh_connections = (
+            self.last_connection_refresh is None
+            or
+            (
+                connection_time
+                -
+                self.last_connection_refresh
             )
+            >= self.connection_refresh_interval
         )
+
+
+        if should_refresh_connections:
+            started = time.perf_counter()
+
+            self.cached_network_connections = (
+                get_network_connections(
+                    process_name_by_pid
+                )
+            )
+
+            timings["connections_ms"] = (
+                time.perf_counter() - started
+            ) * 1000
+
+            self.last_connection_refresh = (
+                connection_time
+            )
+        else:
+            timings["connections_ms"] = 0.0
+
+
+        connections = (
+            self.cached_network_connections
+        )
+
+        started = time.perf_counter()
 
         self_metrics = (
             self.self_monitor.collect(
                 elapsed_seconds
             )
         )
+
+        timings["self_monitor_ms"] = (
+            time.perf_counter() - started
+        ) * 1000
 
         self_pid = (
             self_metrics["pid"]
@@ -218,8 +279,12 @@ class SystemSampler:
             * 1000
         )
 
+        self_metrics["collector_timings"] = (
+            timings
+        )
+
         sample = {
-            "timestamp": datetime.now(),
+            "timestamp": datetime.now(timezone.utc),
 
             "cpu": {
                 "percent": cpu["total_percent"],
@@ -292,13 +357,6 @@ class SystemSampler:
 
                 "connections":
                     connections,
-            },
-
-            "processes": {
-                "count": len(processes),
-                "top_cpu": top_cpu_processes,
-                "top_memory": top_memory_processes,
-                "items": processes,
             },
 
             "self_monitor": self_metrics,

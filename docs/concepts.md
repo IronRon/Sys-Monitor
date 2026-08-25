@@ -701,6 +701,86 @@ The browser can close while sampling continues as long as the Django Python proc
 
 ---
 
+# Worker and Sampling Architecture
+
+## Independent Worker
+
+An independent worker is a background execution path responsible for a specific type of work.
+
+Sys Monitor now separates:
+
+```text
+fast system sampling
+    ↓
+SystemSampler thread
+
+slow process enumeration
+    ↓
+ProcessSnapshotWorker thread
+```
+
+The process scan can take much longer than reading CPU, memory or throughput counters. Moving it to another worker prevents that slower operation from blocking the fast one-second sampling path.
+
+---
+
+## Different Sampling Cadences
+
+Not every metric needs to update at the same frequency.
+
+For example:
+
+```text
+CPU / memory / disk / network
+    → fast
+
+process list
+    → slower cached refresh
+
+socket list
+    → slower cached refresh
+
+database persistence
+    → about every 5 seconds
+```
+
+Using different cadences is a performance/design trade-off between freshness and collection cost.
+
+---
+
+## Fixed-Rate-ish Scheduling
+
+A loop that always sleeps one second **after** doing its work produces:
+
+```text
+1 second wait
++ collection time
+= actual interval
+```
+
+If collection takes 100 ms, the real interval becomes about 1.1 seconds.
+
+The current background loop instead measures work time and waits only for the remainder of the target interval:
+
+```text
+target      1000 ms
+work         100 ms
+remaining    900 ms
+```
+
+This keeps sample starts much closer to the intended cadence.
+
+---
+
+## Cached Snapshot
+
+A cached snapshot is the most recently completed result retained for reuse.
+
+`ProcessSnapshotWorker` publishes its latest process snapshot. The one-second system sampler and HTTP APIs can reuse it without performing another expensive process enumeration.
+
+The trade-off is that cached data may be slightly older than the newest fast metric.
+
+---
+
 # Web Concepts
 
 ## HTTP
@@ -1309,6 +1389,259 @@ This is a useful example of defining a **measurement boundary**: before interpre
 
 ---
 
+# Persistence and Database Concepts
+
+## Persistence
+
+Persistence means data survives beyond the lifetime of the current Python process.
+
+Sys Monitor now has both:
+
+```text
+MonitorHistory
+    → volatile
+    → RAM
+    → disappears on restart
+
+PostgreSQL telemetry
+    → durable
+    → stored by database server
+    → survives Django restart
+```
+
+---
+
+## PostgreSQL
+
+PostgreSQL is the relational database currently used for long-term telemetry.
+
+The local development setup uses a dedicated database and application role:
+
+```text
+database: sys_monitor
+role:     sys_monitor_app
+```
+
+Django connects to PostgreSQL rather than treating the database as part of the Python process.
+
+---
+
+## Psycopg
+
+Psycopg is the Python PostgreSQL driver used underneath Django's PostgreSQL backend.
+
+Conceptually:
+
+```text
+Django ORM
+    ↓
+Django PostgreSQL backend
+    ↓
+Psycopg
+    ↓
+PostgreSQL server
+```
+
+---
+
+## ORM
+
+**ORM** means Object-Relational Mapper.
+
+Django's ORM lets Python model classes represent relational database tables.
+
+For example:
+
+```python
+SystemMetricSample.objects.create(
+    cpu_percent=12.5,
+    ...
+)
+```
+
+is translated by Django into database operations against PostgreSQL.
+
+The ORM is an abstraction layer; it does not replace PostgreSQL.
+
+---
+
+## Model
+
+A Django model is a Python class describing persistent structured data.
+
+Current telemetry models include:
+
+```text
+Device
+SystemMetricSample
+MonitorOverheadSample
+```
+
+Fields such as `FloatField`, `BigIntegerField`, `DateTimeField` and `CharField` describe the columns Django creates through migrations.
+
+---
+
+## Migration
+
+A migration is a versioned description of a database schema change.
+
+Typical workflow:
+
+```powershell
+python manage.py makemigrations telemetry
+python manage.py migrate
+```
+
+`makemigrations` creates migration files from model changes.
+
+`migrate` applies those changes to PostgreSQL.
+
+---
+
+## Foreign Key
+
+A foreign key represents a relational link between database rows.
+
+For example:
+
+```text
+Device
+   │
+   ├── SystemMetricSample
+   ├── SystemMetricSample
+   └── SystemMetricSample
+```
+
+Each telemetry sample stores a reference to its `Device` rather than repeatedly copying all device identity fields.
+
+---
+
+## Database Index
+
+An index is an additional database structure that helps PostgreSQL find rows efficiently.
+
+The telemetry sample models index:
+
+```text
+device + timestamp
+```
+
+because future analytics will frequently ask for:
+
+```text
+samples for this device
+within this time range
+```
+
+Indexes improve reads at the cost of some storage and write overhead.
+
+---
+
+## NULL vs Zero
+
+A database `NULL` means a value is unavailable or unknown.
+
+That is different from:
+
+```text
+0
+```
+
+which means a measurement exists and its value is zero.
+
+Some telemetry fields are nullable because another device or operating system may not expose that metric.
+
+---
+
+## Transaction
+
+A database transaction groups operations into one logical unit.
+
+`TelemetryWriter` uses:
+
+```python
+with transaction.atomic():
+    ...
+```
+
+for the related telemetry inserts and `last_seen_at` update.
+
+If an operation fails, the transaction can be rolled back rather than leaving only part of that group committed.
+
+This relates to the **atomicity** property of database transactions.
+
+---
+
+## Durable vs Volatile State
+
+**Volatile state** exists only while the program is running.
+
+Examples:
+
+```text
+latest_sample
+MonitorHistory
+cached process snapshot
+```
+
+**Durable state** is written to persistent storage:
+
+```text
+PostgreSQL telemetry rows
+```
+
+The live dashboard prefers volatile state because it is fast. Analytics will prefer durable state because it survives restarts and can cover long time ranges.
+
+---
+
+## Telemetry
+
+Telemetry is automatically collected measurement data describing how a system behaves.
+
+Sys Monitor persists a compact telemetry sample approximately every five seconds instead of writing every large live sample.
+
+This reduces database growth while retaining useful historical resolution.
+
+---
+
+## Database Transaction Boundary
+
+The live monitor and persistent writer are intentionally isolated:
+
+```text
+live sample succeeds
+       ↓
+publish latest state
+       ↓
+try database persistence
+       ↓
+database error?
+       ↓
+log it, keep live monitoring
+```
+
+A PostgreSQL problem should not stop CPU/RAM/disk/network monitoring.
+
+---
+
+## Environment Variable / `.env`
+
+Database credentials should not be hard-coded into tracked source files.
+
+The local project loads values such as:
+
+```text
+DB_NAME
+DB_USER
+DB_PASSWORD
+DB_HOST
+DB_PORT
+```
+
+from environment configuration / `.env`, with `.env` excluded from Git.
+
+---
+
 # Hardware Identification Concepts
 
 ## Static vs Live Data
@@ -1674,6 +2007,21 @@ The main new ideas introduced by the project so far include:
 * `deque`
 * layered architecture
 * separation of concerns
+* independent background workers
+* cached snapshots
+* different sampling cadences
+* fixed-rate-ish scheduling
+* PostgreSQL
+* Psycopg
+* Django ORM
+* models and migrations
+* foreign keys
+* database indexes
+* transactions and atomicity
+* durable vs volatile state
+* telemetry persistence
+* `NULL` vs zero
+* environment-based secret configuration
 * abstraction
 * service layers
 * concurrency

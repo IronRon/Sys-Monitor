@@ -23,7 +23,7 @@ This allows the same monitoring engine to support multiple interfaces.
 
 # High-Level Architecture
 
-At the highest level, Sys Monitor has four major layers:
+At the highest level, Sys Monitor separates operating-system access, collection, monitoring, persistence and presentation. Persistence is a side path from live monitoring rather than something the browser must pass through:
 
 ```text
 Operating System
@@ -31,8 +31,10 @@ Operating System
 Collection
       ↓
 Monitoring
-      ↓
-Presentation
+   ┌──┴──────────────┐
+   ↓                 ↓
+Presentation     Persistence
+                 PostgreSQL
 ```
 
 In the current application:
@@ -40,13 +42,11 @@ In the current application:
 ```mermaid
 flowchart TD
     OS["Windows Operating System"]
-
-    PS["psutil"]
-
+    PS["psutil / CIM"]
     C["Collector Layer"]
     M["Monitoring Layer"]
-
-    CLI["Terminal Interface"]
+    P["Telemetry Layer"]
+    PG[(PostgreSQL)]
     DJ["Django Web Layer"]
     FE["Browser Frontend"]
 
@@ -54,9 +54,11 @@ flowchart TD
     PS --> C
     C --> M
 
-    M --> CLI
     M --> DJ
     DJ --> FE
+
+    M --> P
+    P --> PG
 ```
 
 Each layer has a different responsibility.
@@ -65,43 +67,49 @@ Each layer has a different responsibility.
 
 # Application Layers
 
-The current architecture can be divided into:
+The current web-monitoring architecture can be divided into several responsibilities:
 
 ```text
 ┌──────────────────────────────────────────────┐
 │                PRESENTATION                  │
 │                                              │
-│   monitor.py        Django       JavaScript  │
+│           Django + JavaScript + charts       │
 └───────────────────────▲──────────────────────┘
                         │
 ┌───────────────────────┴──────────────────────┐
-│                 MONITORING                   │
+│               SERVICE / LIVE STATE           │
 │                                              │
-│       SystemSampler    MonitorHistory        │
-└───────────────────────▲──────────────────────┘
+│        BackgroundMonitoringService           │
+└──────────────▲──────────────────┬─────────────┘
+               │                  │
+┌──────────────┴──────────┐  ┌────▼─────────────┐
+│      MONITORING         │  │    PERSISTENCE   │
+│                         │  │                  │
+│ SystemSampler           │  │ TelemetryWriter  │
+│ ProcessSnapshotWorker   │  │ Django ORM       │
+│ MonitorHistory          │  │ PostgreSQL       │
+└──────────────▲──────────┘  └──────────────────┘
+               │
+┌──────────────┴───────────────────────────────┐
+│                 COLLECTION                  │
+│                                             │
+│ CPU   Memory   Disk   Network   Processes   │
+└───────────────────────▲─────────────────────┘
                         │
-┌───────────────────────┴──────────────────────┐
-│                 COLLECTION                   │
-│                                              │
-│ CPU   Memory   Disk   Network   Processes    │
-└───────────────────────▲──────────────────────┘
+┌───────────────────────┴─────────────────────┐
+│               SYSTEM ACCESS                 │
+│                                             │
+│              psutil / CIM                   │
+└───────────────────────▲─────────────────────┘
                         │
-┌───────────────────────┴──────────────────────┐
-│               SYSTEM ACCESS                  │
-│                                              │
-│                   psutil                     │
-└───────────────────────▲──────────────────────┘
-                        │
-┌───────────────────────┴──────────────────────┐
-│             OPERATING SYSTEM                 │
-│                                              │
-│                  Windows                     │
-└──────────────────────────────────────────────┘
+┌───────────────────────┴─────────────────────┐
+│             OPERATING SYSTEM                │
+│                                             │
+│                  Windows                    │
+└─────────────────────────────────────────────┘
 ```
 
-This layered design reduces coupling between different parts of the project.
-
----
+Persistence is intentionally a side path. PostgreSQL does not sit between the collectors and the live dashboard, so a telemetry write problem does not have to stop live monitoring.
 
 # Project Structure
 
@@ -141,7 +149,14 @@ Sys_Monitor/
     ├── monitoring/
     │   ├── __init__.py
     │   ├── sampler.py
+    │   ├── process_worker.py
     │   └── history.py
+    │
+    ├── telemetry/
+    │   ├── __init__.py
+    │   ├── models.py
+    │   ├── writer.py
+    │   └── migrations/
     │
     ├── dashboard/
     │   ├── services.py
@@ -205,19 +220,16 @@ flowchart LR
         HARDWARE["hardware.py"]
     end
 
-    subgraph HardwareLayer["Static Hardware Layer"]
-        NORMALIZER["hardware/normalizer.py"]
-        EXPLAIN["hardware/explanations.py"]
-    end
-
     subgraph Monitoring["Monitoring Layer"]
         SAMPLER["sampler.py"]
+        PWORKER["process_worker.py"]
         HISTORY["history.py"]
     end
 
-    subgraph CLI["Terminal Interface"]
-        MONITOR["monitor.py"]
-        TREE["process_tree.py"]
+    subgraph Persistence["Telemetry Layer"]
+        MODELS["telemetry/models.py"]
+        WRITER["telemetry/writer.py"]
+        PG[(PostgreSQL)]
     end
 
     subgraph Web["Django Layer"]
@@ -228,58 +240,45 @@ flowchart LR
     end
 
     subgraph Frontend["Browser"]
-        HTML["index.html / processes.html / hardware.html"]
-        JS["dashboard.js / processes.js / hardware.js"]
-        CSS["dashboard.css / processes.css / hardware.css"]
-        CHART["Chart.js"]
+        HTML["Templates"]
+        JS["JavaScript"]
+        CSS["CSS"]
+        CHART["Chart.js / Cytoscape.js"]
     end
 
     CPU --> SAMPLER
     MEM --> SAMPLER
     DISK --> SAMPLER
     NET --> SAMPLER
-    PROC --> SAMPLER
 
-    HARDWARE --> NORMALIZER
-    NORMALIZER --> EXPLAIN
-    NORMALIZER --> HSERVICE
-    EXPLAIN --> HSERVICE
-
-    SAMPLER --> MONITOR
-    HISTORY --> MONITOR
+    PROC --> PWORKER
 
     SAMPLER --> SERVICE
+    PWORKER --> SERVICE
     HISTORY --> SERVICE
 
+    SERVICE --> WRITER
+    WRITER --> MODELS
+    MODELS --> PG
+
+    HARDWARE --> HSERVICE
     SERVICE --> VIEWS
     HSERVICE --> VIEWS
     URLS --> VIEWS
-
     VIEWS --> HTML
     VIEWS --> JS
-
     JS --> CHART
 ```
 
-The dependency direction generally moves upward:
+The dependency direction generally moves upward from Windows access toward application services and presentation.
 
-```text
-Collectors
-    ↓
-Monitoring
-    ↓
-Interfaces
-```
+Important boundaries include:
 
-The collectors should not depend on Django.
-
-The sampler should not depend on HTML.
-
-The history component should not know that Chart.js exists.
-
-This is intentional.
-
----
+* collectors do not depend on Django,
+* `SystemSampler` does not depend on PostgreSQL,
+* `ProcessSnapshotWorker` owns slow process refreshes,
+* `TelemetryWriter` receives already-built samples rather than collecting Windows metrics,
+* browser code does not know how psutil/CIM retrieve data.
 
 # Dependency Direction
 
@@ -440,7 +439,7 @@ The collectors are intentionally unaware of:
 
 # Layer 4 — Monitoring
 
-The monitoring layer combines collector data.
+The monitoring layer combines fast collector data with independently refreshed process data.
 
 ```mermaid
 flowchart TD
@@ -451,105 +450,86 @@ flowchart TD
     PROC["Processes"]
 
     SAMPLER["SystemSampler"]
+    PWORKER["ProcessSnapshotWorker"]
+    SERVICE["BackgroundMonitoringService"]
 
     CPU --> SAMPLER
     MEM --> SAMPLER
     DISK --> SAMPLER
     NET --> SAMPLER
-    PROC --> SAMPLER
 
-    SAMPLER --> SNAP["System Snapshot"]
+    PROC --> PWORKER
+
+    SAMPLER --> SERVICE
+    PWORKER --> SERVICE
+    SERVICE --> SNAP["Combined Latest Sample"]
 ```
 
-The `SystemSampler` performs operations such as:
+The `SystemSampler` now performs the fast operations such as:
 
-* combining resource measurements
+* combining CPU, memory, disk and network measurements
 * calculating disk throughput
 * calculating network throughput
-* retrieving process rankings
 * maintaining previous counter state
-* creating timestamps
+* creating timezone-aware timestamps
+* measuring fast-sample duration
 
-Its output is one complete system sample.
-
----
+Process enumeration is deliberately separated into `ProcessSnapshotWorker` because profiling showed that a full process scan can take around 1.5 seconds on the development PC. The service combines the cached process snapshot with the fast system sample without forcing the fast path to wait for another process scan.
 
 # System Sample as an Internal Contract
 
-The system sample is an important architectural boundary.
+The combined sample published by `BackgroundMonitoringService` is an important architectural boundary.
 
-Higher-level components receive a structure similar to:
+Higher-level consumers receive a structure containing:
 
 ```text
 sample
 │
 ├── timestamp
-│
 ├── cpu
-│   ├── percent
-│   ├── per_cpu_percent
-│   ├── physical_cores
-│   └── logical_processors
-│
 ├── memory
-│   ├── percent
-│   ├── total_bytes
-│   ├── used_bytes
-│   └── available_bytes
-│
 ├── disk
-│   ├── percent
-│   ├── capacity information
-│   ├── read_bytes_per_second
-│   └── write_bytes_per_second
-│
 ├── network
-│   ├── download_bytes_per_second
-│   ├── upload_bytes_per_second
-│   ├── interfaces[]
-│   └── connections[]
-│
-└── processes
-    ├── count
-    ├── top_cpu
-    └── top_memory
+├── processes
+└── self_monitor
 ```
 
-This structure acts as an **internal contract** between the monitoring engine and its consumers.
+The individual pieces do not all originate from the same worker:
 
-The terminal can consume it.
+```text
+SystemSampler
+    → fast CPU/RAM/disk/network/self values
 
-Django can consume it.
+ProcessSnapshotWorker
+    → cached process values
 
-A future database writer could consume it.
+BackgroundMonitoringService
+    → combines both into the live contract
+```
 
----
+This means the API can keep one stable response structure without requiring every underlying metric to have exactly the same collection cost or refresh cadence.
+
+`TelemetryWriter` also consumes this combined sample, but stores only a compact subset suitable for long-term history.
 
 # System Sample Flow
 
 ```mermaid
 flowchart LR
-    C["Collectors"]
-    S["SystemSampler"]
-    SAMPLE["System Sample"]
+    FAST["Fast Collectors"] --> S["SystemSampler"]
+    PROC["Process Collector"] --> PW["ProcessSnapshotWorker"]
 
-    CLI["Terminal"]
-    WEB["Django"]
-    DB["Future Database"]
-    ANALYTICS["Future Analyzer"]
+    S --> SERVICE["BackgroundMonitoringService"]
+    PW --> SERVICE
 
-    C --> S
-    S --> SAMPLE
+    SERVICE --> SAMPLE["Combined Sample"]
 
-    SAMPLE --> CLI
-    SAMPLE --> WEB
-    SAMPLE -.-> DB
-    SAMPLE -.-> ANALYTICS
+    SAMPLE --> LIVE["Live APIs"]
+    SAMPLE --> HISTORY["MonitorHistory"]
+    SAMPLE --> WRITER["TelemetryWriter"]
+    WRITER --> PG[(PostgreSQL)]
 ```
 
-Dashed arrows represent possible future consumers.
-
----
+The same combined sample can therefore feed both volatile live state and durable telemetry without the database participating in Windows collection.
 
 # History Architecture
 
@@ -616,6 +596,124 @@ After:
 The oldest sample is automatically discarded.
 
 This keeps memory use bounded.
+
+---
+
+# Persistence Layer — Telemetry and PostgreSQL
+
+Persistent telemetry now forms a parallel path beside the short in-memory live history.
+
+```mermaid
+flowchart LR
+    SERVICE["BackgroundMonitoringService"]
+    LIVE["Latest Sample + MonitorHistory"]
+    WRITER["TelemetryWriter"]
+    ORM["Django ORM"]
+    PG[(PostgreSQL)]
+
+    SERVICE --> LIVE
+    SERVICE --> WRITER
+    WRITER --> ORM
+    ORM --> PG
+```
+
+The telemetry app is intentionally separate from collectors and monitoring:
+
+```text
+monitoring/
+    ↓
+produces live data
+
+telemetry/
+    ↓
+persists selected historical data
+
+dashboard/
+    ↓
+serves live APIs and pages
+```
+
+## Telemetry Models
+
+The current relational model is:
+
+```mermaid
+erDiagram
+    DEVICE ||--o{ SYSTEM_METRIC_SAMPLE : has
+    DEVICE ||--o{ MONITOR_OVERHEAD_SAMPLE : hosts
+
+    DEVICE {
+        bigint id
+        slug key
+        string name
+        string device_type
+        string hostname
+        datetime last_seen_at
+    }
+
+    SYSTEM_METRIC_SAMPLE {
+        bigint id
+        datetime timestamp
+        float cpu_percent
+        float memory_percent
+        bigint memory_in_use_bytes
+        float disk_read_bytes_per_second
+        float network_download_bytes_per_second
+        int process_count
+        string top_cpu_process_name
+    }
+
+    MONITOR_OVERHEAD_SAMPLE {
+        bigint id
+        datetime timestamp
+        int backend_pid
+        float cpu_percent
+        bigint memory_bytes
+        float sample_duration_ms
+    }
+```
+
+`Device` provides a stable parent for telemetry. This prevents every row from repeating device identity and also prepares the schema for another device type later.
+
+Both sample tables have a composite index beginning with their device foreign key and timestamp. This matches the expected analytics query pattern:
+
+```text
+one device
++ time range
+```
+
+## ORM Boundary
+
+Application code normally persists/query data through Django model classes:
+
+```text
+Python model operation
+        ↓
+Django ORM
+        ↓
+Django PostgreSQL backend
+        ↓
+Psycopg 3
+        ↓
+PostgreSQL
+```
+
+The ORM is an abstraction over the relational database; PostgreSQL remains the actual persistent store.
+
+## TelemetryWriter
+
+`TelemetryWriter.write_if_due()` receives an already-built monitoring sample. It does not collect Windows metrics itself.
+
+Approximately every five seconds it:
+
+1. resolves/caches the current `Device`,
+2. selects compact system metrics,
+3. selects the leading CPU and memory process,
+4. creates `SystemMetricSample`,
+5. creates `MonitorOverheadSample`,
+6. updates `Device.last_seen_at`.
+
+The related writes run inside `transaction.atomic()` so they form one database transaction. Database failures are caught at the persistence boundary so the live monitor can continue even when PostgreSQL is temporarily unavailable.
 
 ---
 
@@ -1529,35 +1627,41 @@ This cleanly separates backend and frontend technologies.
 
 # Current Background-Monitoring Architecture
 
-The browser no longer determines when measurements are taken. A dedicated thread inside the Django Python process continuously samples the PC and publishes the newest state.
+The browser no longer determines when measurements are taken. The Django process now contains separate workers for fast system sampling and slower process snapshots.
 
 ```mermaid
 flowchart TD
-    THREAD["Background sampler thread"]
-    SAMPLE["SystemSampler.sample()"]
-    LATEST["Latest complete sample"]
-    HISTORY["60-sample rolling history"]
-    SYS["/api/system/"]
-    PROC["/api/processes/"]
-    OVERVIEW["Overview page"]
-    PROCESSES["Processes page"]
+    FAST["sys-monitor-sampler<br/>~1 second target"]
+    SAMPLER["SystemSampler"]
+    PTHREAD["process-snapshot-worker"]
+    PCACHE["Cached process snapshot"]
+    SERVICE["BackgroundMonitoringService"]
+    LATEST["Latest combined sample"]
+    HISTORY["60-sample MonitorHistory"]
+    WRITER["TelemetryWriter<br/>~5 second persistence"]
+    PG[(PostgreSQL)]
+    API["Live JSON APIs"]
 
-    THREAD --> SAMPLE
-    SAMPLE --> LATEST
-    SAMPLE --> HISTORY
-    LATEST --> SYS
-    HISTORY --> SYS
-    LATEST --> PROC
-    SYS --> OVERVIEW
-    PROC --> PROCESSES
+    FAST --> SAMPLER
+    PTHREAD --> PCACHE
+    SAMPLER --> SERVICE
+    PCACHE --> SERVICE
+    SERVICE --> LATEST
+    SERVICE --> HISTORY
+    SERVICE --> WRITER
+    WRITER --> PG
+    LATEST --> API
+    HISTORY --> API
 ```
+
+Profiling motivated this separation. Before the process worker, process enumeration dominated the main sample and pushed the effective cadence beyond two seconds. After moving it off the fast path, the main system sampler typically completes in roughly 50–130 ms while process enumeration can continue independently for roughly 1.5 seconds.
 
 ## Browser Open or Closed
 
 ```text
 Django process running
         ↓
-background thread running
+background workers running
         ↓
 samples continue
 
@@ -1567,43 +1671,39 @@ polls APIs and displays latest samples
 
 Browser closed
         ↓
-frontend polling stops, but monitoring continues
+frontend polling stops, but monitoring and telemetry persistence continue
 ```
 
-This removes the earlier conflict where `/api/system/` and `/api/processes/` could independently trigger process CPU measurements. Both endpoints now expose data from the same sampling cycle.
+Multiple browser clients still read the same shared latest state rather than triggering extra collector passes.
 
 ## Worker Lifecycle
 
-The sampler thread is created with `daemon=True`, so it cannot keep the Python process alive on its own. Normal shutdown is still handled gracefully: `stop()` sets a `threading.Event`, the worker exits its loop, and `join()` waits briefly for it to finish. An `atexit` handler requests this shutdown during normal interpreter exit.
-
----
+Both the fast sampler thread and process snapshot worker are daemon-backed background workers, so they do not keep Python alive by themselves. `BackgroundMonitoringService.stop()` signals the fast sampler to stop, joins it briefly, and also stops the process worker. An `atexit` handler requests this shutdown during normal interpreter exit.
 
 # Restarting Django Loses History
 
-Current history exists in RAM.
+The **live in-memory** history still disappears when Django restarts:
 
 ```text
 Django running
     ↓
-history exists
+MonitorHistory exists in RAM
 
 Django stops
     ↓
-history disappears
+MonitorHistory disappears
 ```
 
----
+However, compact telemetry written to PostgreSQL remains durable across restarts.
 
-## Multiple Clients
-
-Multiple tabs can poll the APIs without causing extra collection passes. They all read the same latest sample.
+This creates two intentionally different history stores:
 
 ```text
-                    latest sample
-                         │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-        Browser tab A          Browser tab B
+MonitorHistory
+    → short live window
+
+PostgreSQL
+    → persistent long-term data
 ```
 
 # Shared Monitoring State
@@ -1879,79 +1979,61 @@ The complete current system can be represented as:
 ```mermaid
 flowchart TD
     WIN["Windows"]
+    PS["psutil / CIM"]
 
-    PS["psutil"]
-
-    subgraph Collectors["Collectors"]
-        CPU["CPU"]
-        RAM["Memory"]
-        DISK["Disk"]
-        NET["Network"]
+    subgraph Collection["Collection"]
+        FASTCOL["CPU / Memory / Disk / Network"]
         PROC["Processes"]
         HW["Static Hardware"]
     end
 
     subgraph Monitoring["Monitoring"]
         SAMPLER["SystemSampler"]
+        PWORKER["ProcessSnapshotWorker"]
+        SERVICE["BackgroundMonitoringService"]
         HISTORY["MonitorHistory"]
     end
 
-    subgraph Terminal["Terminal Interface"]
-        MONITOR["monitor.py"]
+    subgraph Persistence["Persistence"]
+        WRITER["TelemetryWriter"]
+        ORM["Django ORM / Psycopg"]
+        PG[(PostgreSQL)]
     end
 
-    subgraph Django["Django Web Layer"]
-        SERVICE["BackgroundMonitoringService"]
-        HSERVICE["HardwareService"]
-        VIEW["Views"]
-        API["/api/system/"]
-        NETAPI["/api/network/"]
-        DNS["HostnameResolver"]
-    end
-
-    subgraph Browser["Frontend"]
-        JS["dashboard.js"]
-        HTML["HTML/CSS"]
-        CHART["Chart.js"]
+    subgraph Web["Django + Browser"]
+        API["Live APIs"]
+        UI["Dashboard Pages"]
     end
 
     WIN --> PS
-
-    PS --> CPU
-    PS --> RAM
-    PS --> DISK
-    PS --> NET
+    PS --> FASTCOL
     PS --> PROC
+    WIN --> HW
 
-    CPU --> SAMPLER
-    RAM --> SAMPLER
-    DISK --> SAMPLER
-    NET --> SAMPLER
-    PROC --> SAMPLER
-
-    HW --> HWSERVICE["HardwareService"]
-    HWSERVICE --> HWAPI["/api/hardware/"]
-
-    SAMPLER --> HISTORY
-
-    SAMPLER --> MONITOR
-    HISTORY --> MONITOR
-
+    FASTCOL --> SAMPLER
+    PROC --> PWORKER
     SAMPLER --> SERVICE
-    HISTORY --> SERVICE
+    PWORKER --> SERVICE
+    SERVICE --> HISTORY
 
-    SERVICE --> VIEW
-    VIEW --> API
-    VIEW --> NETAPI
-    DNS --> NETAPI
+    SERVICE --> API
+    HISTORY --> API
+    API --> UI
 
-    API --> JS
-    NETAPI --> JS
-    JS --> HTML
-    JS --> CHART
+    SERVICE --> WRITER
+    WRITER --> ORM
+    ORM --> PG
 ```
 
----
+The architecture therefore has two history paths:
+
+```text
+MonitorHistory
+    → short, volatile, high-frequency live UI history
+
+PostgreSQL telemetry
+    → compact, durable, lower-frequency historical data
+```
 
 # Current Web Data Flow Summary
 
@@ -2032,12 +2114,11 @@ The background sampler removes browser-driven collection, but the design is stil
 * the worker thread lives inside the Django Python process
 * stopping/restarting Django stops the worker and clears in-memory history
 * multiple separate Django processes would not share the same latest sample/history
-* no persistent telemetry database exists
 * no message queue exists
 * no WebSocket streaming exists
 * the browser still polls the APIs to receive updates
 * no authentication exists
-* no long-term historical query layer exists
+* PostgreSQL telemetry exists, but no long-term historical query/service layer or analytics API has been built yet
 
 These are appropriate trade-offs for the current local application.
 
@@ -2049,82 +2130,63 @@ Current:
 
 ```text
 Django process
-    ↓
-background sampling thread
-    ↓
-latest sample + in-memory history
-    ↓
-APIs
-    ↓
-Dashboard
+    │
+    ├── fast system sampler
+    ├── process snapshot worker
+    ├── 60-sample live history
+    └── TelemetryWriter
+             ↓
+         PostgreSQL
+    │
+    └── live APIs
+             ↓
+         Dashboard
 ```
 
-A later version may move collection outside Django and add persistence:
+The next architectural step is not adding persistence—it now exists. The next step is to build a query/analytics layer over the persisted rows:
 
 ```text
-Dedicated monitor process / Windows service
+PostgreSQL telemetry
         ↓
-Continuous samples
+Telemetry query/service layer
         ↓
-Live buffer + historical database
+aggregates + time ranges
         ↓
-Django API
+analytics API
         ↓
-Dashboard + analytics
+Analytics page
 ```
 
-The collectors and `SystemSampler` remain reusable through that transition.
-
----
+A later production-style version could still move monitoring workers outside Django into a dedicated monitor process or Windows service while keeping the collector, telemetry and API boundaries.
 
 # Summary
 
-Sys Monitor currently follows a layered architecture:
+Sys Monitor currently follows a layered architecture with separate fast, slow and persistent paths:
 
 ```text
 Windows
     ↓
-psutil
-    ↓
 Collectors
-    ↓
-SystemSampler
-    ↓
-BackgroundMonitoringService
-    ├── latest sample
-    └── MonitorHistory
-            ↓
-         Interfaces
+    ├── fast metrics → SystemSampler
+    └── processes    → ProcessSnapshotWorker
+                         ↓
+              BackgroundMonitoringService
+                 ├── latest sample
+                 ├── MonitorHistory
+                 └── TelemetryWriter
+                          ↓
+                    Django ORM
+                          ↓
+                     PostgreSQL
 ```
 
-The terminal interface directly consumes the monitoring layer.
+The terminal interface continues to reuse the monitoring code, while the Django web layer exposes shared live state through JSON APIs.
 
-The web interface introduces:
+The most important architectural characteristics are now:
 
-```text
-BackgroundMonitoringService
-    ↓
-Django
-    ↓
-JSON API
-    ↓
-JavaScript
-    ↓
-Chart.js
-```
+* browser requests do not drive collection,
+* expensive process enumeration does not block the fast system sampler,
+* short live history and durable historical telemetry have different responsibilities,
+* PostgreSQL persistence is isolated from the live monitoring path,
+* future analytics can be built as a query layer over existing telemetry rather than changing the collectors.
 
-The most important current architectural characteristic is that sampling is now **independent of browser requests**:
-
-```text
-Background worker
-    ↓
-monitoring sample
-    ↓
-shared latest state
-    ↓
-JSON APIs read that state
-```
-
-This gives the web application one consistent sampling stream while preserving clean module boundaries for a later dedicated monitoring process or Windows service.
-
-The next document, `api.md`, describes the HTTP API boundary in detail, including the current `/api/system/` endpoint, response structure, field meanings, units, example responses and how the frontend consumes the API.

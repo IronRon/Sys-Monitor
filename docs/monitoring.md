@@ -12,13 +12,17 @@ The monitoring layer currently contains:
 src/monitoring/
 ├── __init__.py
 ├── sampler.py
+├── process_worker.py
 └── history.py
 ```
 
-The two main components are:
+The main components are:
 
 * `SystemSampler`
+* `ProcessSnapshotWorker`
 * `MonitorHistory`
+
+For the Django runtime, `BackgroundMonitoringService` coordinates these components and also hands compact combined samples to the telemetry persistence layer.
 
 ---
 
@@ -75,17 +79,18 @@ flowchart TD
     Memory --> Sampler
     Disk --> Sampler
     Network --> Sampler
-    Processes --> Sampler
 
-    Sampler --> Sample[System Sample]
+    Processes --> ProcessWorker[ProcessSnapshotWorker]
 
+    Sampler --> Service[BackgroundMonitoringService]
+    ProcessWorker --> Service
+
+    Service --> Sample[Combined Latest Sample]
     Sample --> History[MonitorHistory]
+    Sample --> Telemetry[TelemetryWriter]
 
-    Sample --> Terminal[Terminal Monitor]
-    History --> Terminal
-
-    Sample --> Web[Django Monitoring Service]
-    History --> Web
+    Sample --> Web[Django APIs]
+    Telemetry --> PostgreSQL[(PostgreSQL)]
 ```
 
 The important separation is:
@@ -352,11 +357,13 @@ The first measurement is therefore a **baseline**, not a displayed sample.
 
 Individual process CPU percentages behave similarly.
 
-Before normal monitoring begins, the project calls:
+Before the process worker begins normal process snapshots, it calls:
 
 ```python
 prime_process_cpu()
 ```
+
+Process CPU priming is now owned by `ProcessSnapshotWorker`, not by `SystemSampler`.
 
 This loops over currently running processes and performs an initial CPU measurement.
 
@@ -821,7 +828,7 @@ useful for rate calculations
 
 # Taking a Sample
 
-Once the sampler has been primed, the normal sampling operation looks roughly like this:
+Once the fast sampler has been primed, one `SystemSampler.sample()` call now looks roughly like this:
 
 ```text
 Call CPU collector
@@ -830,30 +837,40 @@ Call memory collector
        ↓
 Call disk collector
        ↓
-Call network collector
+Call network collectors
        ↓
-Call process collector
+Calculate disk/network rates
        ↓
-Calculate disk rates
+Use latest cached process list only where needed
        ↓
-Calculate network rates
+Collect self-overhead
        ↓
-Rank processes
-       ↓
-Create system sample
+Create fast system sample
        ↓
 Update previous counters
        ↓
-Return sample
+Return
 ```
 
----
+The expensive `get_processes()` enumeration is **not** performed here anymore. It runs independently inside `ProcessSnapshotWorker`.
+
+`BackgroundMonitoringService` then combines:
+
+```text
+fast system sample
+        +
+cached process snapshot
+        ↓
+combined latest sample
+```
+
+before publishing the result to APIs, short-term history and telemetry persistence.
 
 # Sample Structure
 
-The sampler combines the collector results into one common object.
+The Django monitoring service publishes one combined object after merging the fast `SystemSampler` result with the latest cached process snapshot.
 
-A simplified sample looks like:
+A simplified structure is:
 
 ```python
 {
@@ -869,48 +886,49 @@ A simplified sample looks like:
     "memory": {
         "percent": ...,
         "total_bytes": ...,
-        "used_bytes": ...,
         "available_bytes": ...,
         "in_use_bytes": ...,
-        "pagefile": {
-            "total_bytes": ...,
-            "used_bytes": ...,
-            "free_bytes": ...,
-            "percent": ...
-        }
+        "pagefile": {...}
     },
 
     "disk": {
         "percent": ...,
-        "total_bytes": ...,
-        "used_bytes": ...,
-        "free_bytes": ...,
         "read_bytes_per_second": ...,
         "write_bytes_per_second": ...
     },
 
     "network": {
         "download_bytes_per_second": ...,
-        "upload_bytes_per_second": ...
+        "upload_bytes_per_second": ...,
+        "interfaces": [...],
+        "connections": [...]
     },
 
     "processes": {
         "count": ...,
         "top_cpu": ...,
-        "top_memory": ...
+        "top_memory": ...,
+        "items": ...,
+        "collection_duration_ms": ...,
+        "ready": ...
+    },
+
+    "self_monitor": {
+        "cpu_percent": ...,
+        "memory_bytes": ...,
+        "sample_duration_ms": ...,
+        "process_collection_duration_ms": ...
     }
 }
 ```
 
-This sample becomes the main data structure shared between the monitoring engine and the application's interfaces.
+This combined sample is the main live contract used by the Django APIs.
 
-The CPU portion now carries both per-logical-processor utilisation and the physical/logical processor counts. The dashboard uses these values directly to build the logical-processor visualisation.
-
----
+A smaller version is copied into `MonitorHistory`, and an even more compact subset is written by `TelemetryWriter` to PostgreSQL.
 
 # Why Use One Common Sample?
 
-Without a common structure, each interface might separately request:
+Without a common combined structure, each interface might separately request or collect:
 
 ```text
 CPU
@@ -920,25 +938,25 @@ network
 processes
 ```
 
-and perform its own calculations.
+That would duplicate work and could produce inconsistent values.
 
 Instead:
 
 ```text
-Collectors
-    ↓
-SystemSampler
-    ↓
-one complete sample
-    ↓
-┌───────────────┬────────────────┐
-│               │                │
-Terminal     Django API      Future storage
+SystemSampler        ProcessSnapshotWorker
+      │                       │
+      └──────────┬────────────┘
+                 ▼
+      BackgroundMonitoringService
+                 │
+      ┌──────────┼──────────┐
+      ▼          ▼          ▼
+ live APIs   MonitorHistory TelemetryWriter
+                            ↓
+                        PostgreSQL
 ```
 
-This gives the project a stable internal representation of a system measurement.
-
----
+This gives the web application a stable internal representation while allowing each data source to use an appropriate sampling cadence.
 
 # Raw Values vs Presentation Values
 
@@ -986,9 +1004,7 @@ The underlying measurement remains the same.
 
 # Process Rankings
 
-The process collector returns information about all accessible running processes.
-
-The sampler then asks for:
+`ProcessSnapshotWorker` receives the full accessible process list from the process collector and computes:
 
 ```python
 get_top_cpu_processes(
@@ -1006,34 +1022,90 @@ get_top_memory_processes(
 )
 ```
 
-The current web sampler keeps both forms of process data in the **latest** sample:
+The worker publishes:
 
-- `top_cpu` and `top_memory` for the overview dashboard
-- `items` containing the complete process list for `/api/processes/`
+- `top_cpu`
+- `top_memory`
+- `processes`
+- `collection_duration_ms`
+- `ready`
 
-Processes are therefore collected once per sampling cycle and shared by both APIs. The complete process list is deliberately omitted from each rolling-history entry so that hundreds of process objects are not duplicated 60 times.
+`BackgroundMonitoringService` attaches those values to the latest combined sample.
 
----
-
+The complete process list is deliberately omitted from every rolling-history entry so hundreds of process objects are not duplicated 60 times. PostgreSQL persistence is even more compact: it stores the process count plus only the top CPU and top memory process attribution for each persisted telemetry sample.
 
 # Shared Process Sampling
 
-The earlier `ProcessService` has been removed. Both the Overview and Processes pages now read from one shared `BackgroundMonitoringService`.
+The earlier design collected the full process list inside every `SystemSampler.sample()` call. Profiling with the self-overhead instrumentation showed that process enumeration dominated the sample:
 
 ```text
-BackgroundMonitoringService
-        │
-        ├── latest sample
-        │      ├── top CPU / RAM processes
-        │      └── complete process list
-        │
-        ├── /api/system/
-        └── /api/processes/
+Before separation
+
+System sample total       ~1200–1300 ms
+Process collection        ~1200 ms
+Everything else           tens of milliseconds
 ```
 
-This avoids taking a second process CPU measurement whenever `/api/processes/` is requested and gives both pages a consistent view of the same sampling cycle.
+This meant a nominal one-second loop actually produced samples roughly every two seconds because the process scan blocked the fast path.
 
----
+Process collection is now separated:
+
+```mermaid
+flowchart LR
+    PROC["processes.py"] --> PW["ProcessSnapshotWorker"]
+    PW --> CACHE["Cached process snapshot"]
+
+    SYS["SystemSampler ~1 Hz"] --> SERVICE["BackgroundMonitoringService"]
+    CACHE --> SERVICE
+
+    SERVICE --> LATEST["Latest combined sample"]
+    LATEST --> API1["/api/system/"]
+    LATEST --> API2["/api/processes/"]
+    LATEST --> API3["/api/memory/"]
+```
+
+`ProcessSnapshotWorker` runs in its own daemon thread. It owns:
+
+* process CPU priming
+* the expensive `get_processes()` call
+* top CPU ranking
+* top memory ranking
+* process-collection timing
+* a lock-protected cached process snapshot
+
+The service reads this snapshot without causing another enumeration.
+
+After the separation, the fast system sample on the development PC typically dropped to roughly:
+
+```text
+~50–130 ms
+```
+
+while process enumeration can still take roughly:
+
+```text
+~1.5 seconds
+```
+
+The important change is that the slow operation no longer blocks CPU, memory, disk and network sampling.
+
+The process data therefore has a different freshness cadence from the fast resource data. This is an intentional design choice:
+
+```text
+CPU / memory / disk / network
+    → approximately every 1 second
+
+Processes
+    → independent cached refresh
+
+Network socket list
+    → slower cached refresh
+
+PostgreSQL persistence
+    → approximately every 5 seconds
+```
+
+This demonstrates that different metrics can use different sampling frequencies according to their cost and how quickly they need to update.
 
 # Updating Previous Counters
 
@@ -1733,48 +1805,67 @@ The web interface therefore benefits from exactly the same monitoring calculatio
 
 # Current Django Sampling Behaviour
 
-The Django web monitor now uses a **background sampling thread** rather than browser-request-driven collection.
+The Django web monitor uses background workers rather than browser-request-driven collection.
 
 ```text
-                   Background thread
+                 Django Python process
                          │
-                    wait ~1 second
-                         ↓
-                    SystemSampler
-                         ↓
-              latest sample + history
+          ┌──────────────┴──────────────┐
+          ▼                             ▼
+  sys-monitor-sampler          process-snapshot-worker
+  ~1 second target             slower independent refresh
+          │                             │
+          ▼                             ▼
+    SystemSampler                cached processes
+          └──────────────┬──────────────┘
+                         ▼
+             BackgroundMonitoringService
                          │
-              ┌──────────┴──────────┐
-              ▼                     ▼
-       /api/system/          /api/processes/
-              │                     │
-              ▼                     ▼
-        Overview page          Processes page
+               latest sample + history
+                         │
+               ┌─────────┴─────────┐
+               ▼                   ▼
+        live JSON APIs       TelemetryWriter
+                                   │
+                                   ▼
+                              PostgreSQL
 ```
 
-Only the background worker calls `SystemSampler.sample()`. HTTP requests now read already-collected data. Closing the browser therefore stops frontend polling but **does not stop monitoring** while the Django Python process remains alive.
-
----
+Only background workers perform system/process collection. HTTP requests read already-collected state. Closing the browser therefore stops frontend polling but **does not stop monitoring or telemetry persistence** while the Django Python process remains alive.
 
 # Background Monitoring Thread
 
-`BackgroundMonitoringService.start()` primes the sampler and creates a Python `threading.Thread` whose target is the service's `_run()` method. The loop waits for roughly one sampling interval, takes one complete sample, stores it as `latest_sample`, and appends a smaller copy to `MonitorHistory`.
+`BackgroundMonitoringService.start()` starts the independent `ProcessSnapshotWorker`, primes the fast `SystemSampler`, and creates the `sys-monitor-sampler` thread whose target is the service's `_run()` method.
 
-The worker is created with `daemon=True`. A daemon thread does not keep the Python process alive by itself; however, graceful shutdown is handled separately using a stop event and `join()`.
+The main loop uses a fixed-rate-ish schedule. It measures how long the current sampling work took and subtracts that work time from the next wait.
+
+For example:
 
 ```text
-Django process
-│
-├── HTTP request handling
-│
-└── sys-monitor-sampler thread
-      ├── wait
-      ├── sample
-      ├── publish latest sample
-      └── repeat
+target interval       1000 ms
+sample work            100 ms
+remaining wait         900 ms
 ```
 
----
+This keeps sample starts close to the intended one-second cadence instead of producing:
+
+```text
+1 second wait + sample duration
+```
+
+The two worker responsibilities are therefore:
+
+```text
+sys-monitor-sampler
+    ↓
+fast system metrics
+
+process-snapshot-worker
+    ↓
+slower process enumeration
+```
+
+Both are stopped through `BackgroundMonitoringService.stop()` rather than relying only on daemon-thread termination.
 
 # Thread Events and Shutdown
 
@@ -2144,6 +2235,170 @@ This gives the project two distinct data lifecycles:
 - **hardware identity** — collected on demand and cached
 
 ---
+# Persistent Telemetry with PostgreSQL
+
+The project now has a second kind of history in addition to `MonitorHistory`.
+
+```text
+MonitorHistory
+    ↓
+60 recent samples
+    ↓
+RAM only
+    ↓
+fast live graphs
+
+PostgreSQL telemetry
+    ↓
+compact samples approximately every 5 seconds
+    ↓
+durable across application restarts
+    ↓
+future analytics
+```
+
+The persistence code lives in the Django app:
+
+```text
+src/telemetry/
+├── models.py
+├── writer.py
+└── migrations/
+```
+
+## Django ORM Models
+
+`models.py` currently defines three models.
+
+### `Device`
+
+Represents a monitored device rather than baking one specific PC into every telemetry row.
+
+Important fields include:
+
+```text
+key
+name
+device_type
+hostname
+manufacturer
+model
+created_at
+last_seen_at
+```
+
+`DeviceType` currently includes Windows and Android values, which gives the schema a place for a later phone-monitoring extension.
+
+### `SystemMetricSample`
+
+Stores compact machine telemetry such as:
+
+```text
+timestamp
+CPU %
+memory % / in-use / available
+page-file %
+disk capacity and read/write throughput
+network download/upload throughput
+process count
+top CPU process
+top memory process
+```
+
+The full live process list and network socket list are deliberately **not** persisted every five seconds.
+
+### `MonitorOverheadSample`
+
+Stores the monitoring backend's own historical overhead separately:
+
+```text
+backend PID
+CPU %
+memory
+read/write I/O
+sample duration
+thread count
+handle count
+network socket count
+```
+
+Keeping system telemetry and monitor-overhead telemetry in separate tables makes their meanings explicit.
+
+## `TelemetryWriter`
+
+`src/telemetry/writer.py` converts the existing combined sample dictionary into ORM rows.
+
+```text
+BackgroundMonitoringService
+        ↓
+latest combined sample
+        ↓
+TelemetryWriter.write_if_due()
+        ↓
+Django ORM
+        ↓
+PostgreSQL
+```
+
+The writer uses `time.monotonic()` to decide when approximately five seconds have elapsed. It then creates one `SystemMetricSample`, one `MonitorOverheadSample`, and updates `Device.last_seen_at`.
+
+The writes are wrapped in:
+
+```python
+with transaction.atomic():
+    ...
+```
+
+so the related database operations are committed as one unit or rolled back together if a database operation fails.
+
+Because telemetry writes happen from a long-running background thread rather than a normal HTTP request lifecycle, the writer also calls:
+
+```python
+close_old_connections()
+```
+
+around its database work.
+
+Database failures are isolated from the live monitor: `BackgroundMonitoringService` logs persistence failures but continues publishing live samples.
+
+## PostgreSQL Setup
+
+The development setup uses:
+
+```text
+PostgreSQL 18
+Django 6
+Psycopg 3
+Django ORM
+```
+
+Django's `DATABASES` setting uses the PostgreSQL backend and reads local credentials from environment variables / `.env`.
+
+Conceptually:
+
+```text
+Django model / QuerySet
+        ↓
+Django ORM
+        ↓
+Django PostgreSQL backend
+        ↓
+Psycopg
+        ↓
+PostgreSQL server
+```
+
+Migrations convert model definitions into database schema changes:
+
+```powershell
+python manage.py makemigrations telemetry
+python manage.py migrate
+```
+
+The telemetry tables therefore belong to PostgreSQL even though most application code interacts with them using Python model classes rather than hand-written SQL.
+
+---
+
 # Current Limitations
 
 The monitoring layer is still intentionally simple.
@@ -2151,15 +2406,13 @@ The monitoring layer is still intentionally simple.
 Current limitations include:
 
 * the background worker currently runs inside the Django Python process rather than as a separate Windows service/process
-* history is stored only in memory
-* only 60 recent samples are retained
-* samples disappear when the application stops
+* live rolling history is still only 60 in-memory samples; PostgreSQL is used for separate durable telemetry
+* no long-term telemetry query/service layer has been built yet
 * memory history is high-level and does not yet include Windows standby/cache, pool or page-fault counters
 * disk throughput history is system-wide rather than attributed to individual processes or physical devices
 * network connection monitoring is socket-level rather than packet-level
 * network byte rates are not yet attributed directly to individual processes
 * reverse-DNS hostname enrichment is best-effort
-* no database persistence
 * no configurable sampling interval through the UI
 * no long-term aggregation
 * no moving averages
@@ -2167,7 +2420,7 @@ Current limitations include:
 * no event correlation
 * no historical process tracking
 * no persistence of process start/stop events
-* no sampling performance statistics
+* sampling duration is measured, but there is not yet a dedicated performance-analysis view for the sampler/process worker
 * no automatic handling of suspended/resumed system time
 
 ---
@@ -2176,11 +2429,9 @@ Current limitations include:
 
 Future monitoring logic may include:
 
-## Persistent History
+## Historical Query Layer
 
-Store samples in a database.
-
-Possible periods:
+Persistence now exists in PostgreSQL. The next step is to query the stored telemetry over periods such as:
 
 ```text
 last hour
@@ -2188,6 +2439,8 @@ last day
 last week
 last month
 ```
+
+The query layer can calculate averages, peaks, totals and time-window series without changing the live-monitoring API.
 
 ---
 
@@ -2281,7 +2534,7 @@ This would move the project from simple monitoring toward performance diagnosis.
 
 # Future Monitoring Architecture
 
-The current background thread already separates sampling from browser requests. A later production-style version may move that worker into a separate process/service and add persistent storage:
+The current background workers already separate sampling from browser requests, and PostgreSQL now provides persistent telemetry. A later production-style version may move those workers into a separate process/service:
 
 ```mermaid
 flowchart TD
@@ -2292,7 +2545,7 @@ flowchart TD
     Collectors --> Worker[Background Monitoring Worker]
 
     Worker --> Live[Live Rolling Buffer]
-    Worker --> DB[(Historical Database)]
+    Worker --> DB[(PostgreSQL Telemetry)]
     Worker --> Analyzer[Performance Analyzer]
 
     Live --> API[Django API]
@@ -2432,10 +2685,12 @@ The monitoring layer asks:
 
 > What do those measurements mean when compared over time?
 
-`SystemSampler` combines raw collector information, calculates time-based rates, ranks process usage, and produces one consistent system snapshot.
+`SystemSampler` handles the fast system metrics and time-based rate calculations.
 
-`MonitorHistory` retains a bounded rolling window of those snapshots.
+`ProcessSnapshotWorker` performs expensive process enumeration independently and publishes a cached snapshot.
 
-Together they form the reusable monitoring engine shared by the terminal application and Django dashboard.
+`BackgroundMonitoringService` combines those data sources, `MonitorHistory` retains the short live window, and `TelemetryWriter` persists compact samples through the Django ORM into PostgreSQL.
+
+Together these components provide both low-latency live monitoring and the durable data foundation required for analytics.
 
 The next documentation layer, `architecture.md`, will step back from individual classes and describe how all major project components communicate from Windows system information through to the terminal and browser interfaces.

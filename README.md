@@ -22,14 +22,48 @@ The project is also intended as a learning tool for operating-system and compute
 ## Quickstart
 
 Prerequisites:
-- Python 3.8+
-- psutil
 
-Install and run:
-```powershell
-pip install -r requirements.txt
-python -m src.monitor
+- Python 3.14
+- PostgreSQL 18 running locally
+- Python dependencies from `requirements.txt`, including Django, psutil and Psycopg 3
+
+The Django application now uses PostgreSQL for persistent telemetry. A local development database can be created with a dedicated application role:
+
+```sql
+CREATE ROLE sys_monitor_app
+WITH LOGIN
+PASSWORD 'your-local-password';
+
+CREATE DATABASE sys_monitor
+OWNER sys_monitor_app;
 ```
+
+Database credentials are kept outside source control in a project-root `.env` file:
+
+```text
+DB_NAME=sys_monitor
+DB_USER=sys_monitor_app
+DB_PASSWORD=your-local-password
+DB_HOST=127.0.0.1
+DB_PORT=5432
+```
+
+`.env` should be included in `.gitignore`.
+
+Install dependencies and apply Django migrations:
+
+```powershell
+python -m pip install -r requirements.txt
+python manage.py migrate
+```
+
+Run the Django dashboard from `src/`:
+
+```powershell
+python manage.py runserver
+```
+
+The terminal monitor can still use the monitoring layer independently of the Django frontend.
 
 ## Current Features
 
@@ -168,6 +202,19 @@ The documentation area renders the Markdown files in `docs/` as web pages under 
 
 ---
 
+### Background Process Worker and Persistent Telemetry
+
+- Expensive process enumeration runs in a separate `ProcessSnapshotWorker` instead of blocking the one-second `SystemSampler`
+- The fast system sampler now normally completes in tens of milliseconds to roughly a little over 100 ms on the development PC
+- Process snapshots refresh independently and are reused by the Overview, Processes, Memory and Network features
+- Live UI history remains an in-memory 60-sample rolling buffer
+- A new `telemetry` Django app persists compact long-term samples to PostgreSQL
+- `TelemetryWriter` stores selected system and self-overhead metrics approximately every five seconds
+- Django ORM models currently include `Device`, `SystemMetricSample` and `MonitorOverheadSample`
+- The database stores compact top-CPU/top-memory process attribution rather than the full live process list every five seconds
+
+---
+
 # Technology
 
 The project currently uses:
@@ -180,6 +227,9 @@ The project currently uses:
 - JavaScript
 - Chart.js
 - Windows PowerShell / CIM hardware queries
+- PostgreSQL 18
+- Psycopg 3
+- Django ORM and migrations
 
 ---
 
@@ -210,7 +260,13 @@ Sys_Monitor/
     │
     ├── monitoring/
     │   ├── sampler.py
+    │   ├── process_worker.py
     │   └── history.py
+    │
+    ├── telemetry/
+    │   ├── models.py
+    │   ├── writer.py
+    │   └── migrations/
     │
     ├── dashboard/
     │   ├── services.py
@@ -236,25 +292,37 @@ Sys_Monitor/
 
 # Architecture Overview
 
-The application separates system-data collection from presentation.
+The application separates fast system collection, slower process collection, persistence and presentation.
 
 ```text
 Windows
    │
-   ├── psutil ──────────────── live performance collectors
+   ├── psutil ──────────────── fast collectors
    │                              │
    │                              ▼
    │                         SystemSampler
    │                              │
-   │                              ▼
-   │                 BackgroundMonitoringService
-   │                              │
-   │         ┌──────────┼──────────┬──────────┐
-   │         ▼          ▼          ▼          ▼
-   │   /api/system/ /api/processes/ /api/memory/ /api/disk/ /api/network/
-   │         │          │          │          │
-   │         ▼          ▼          ▼          ▼
-   │      Overview   Processes   Memory      Disk      Network
+   │                              ├──────────────┐
+   │                              │              │
+   │   process collector          │              │
+   │          │                   │              │
+   │          ▼                   │              │
+   │ ProcessSnapshotWorker        │              │
+   │          └──────────────┬────┘              │
+   │                         ▼                   │
+   │              BackgroundMonitoringService   │
+   │                 │                    │      │
+   │                 │                    ▼      │
+   │                 │             TelemetryWriter
+   │                 │                    │
+   │                 │               Django ORM
+   │                 │                    │
+   │                 │               PostgreSQL
+   │                 ▼
+   │          live JSON APIs
+   │                 │
+   │                 ▼
+   │             dashboards
    │
    └── PowerShell / CIM ─────── static hardware collector
                                   │
@@ -266,23 +334,11 @@ Windows
                                   │
                                   ▼
                            /api/hardware/
-                                  │
-                    ┌─────────────┴─────────────┐
-                    ▼                           ▼
-             Live dashboards              About My PC
 ```
 
-The separation means the system-monitoring code is not tied to a particular user interface.
+This separation keeps expensive process enumeration off the fast one-second sampling path and keeps database persistence out of the collector layer.
 
-The same monitoring engine can eventually be used by:
-
-- the terminal application
-- the Django web dashboard
-- continuous background monitoring
-- database storage
-- other applications or APIs
-
----
+The same lower-level monitoring ideas can still support multiple interfaces, while the Django runtime now adds background workers and durable PostgreSQL telemetry around them.
 
 # Collectors
 
@@ -574,15 +630,19 @@ src/dashboard/services.py
 
 It now owns the live web-monitoring lifecycle. It contains:
 
-- one `SystemSampler`
+- one fast `SystemSampler`
+- one independent `ProcessSnapshotWorker`
 - one `MonitorHistory`
-- the latest complete sample
-- a background sampling thread
+- one `TelemetryWriter`
+- the latest combined sample
+- a background system-sampling thread
 - thread-safe events and locking
 
-The background thread samples the PC approximately once per second even when no browser tab is open. `/api/system/`, `/api/processes/`, `/api/memory/` and `/api/disk/` no longer trigger their own collection passes; they read different views of the same latest sample and rolling history.
+The fast sampler aims to start approximately once per second even when no browser tab is open. Process enumeration is significantly more expensive on Windows, so it runs independently in `ProcessSnapshotWorker` and publishes a cached process snapshot for the service to combine with the fast system sample.
 
-The service keeps the complete process list only in the latest sample, while rolling history stores smaller historical snapshots so that hundreds of process objects are not duplicated 60 times.
+`/api/system/`, `/api/processes/`, `/api/memory/`, `/api/disk/`, `/api/network/` and `/api/self/` read shared background state rather than triggering their own collector passes.
+
+The service keeps the complete process list only in the latest sample, while rolling history stores smaller historical snapshots so that hundreds of process objects are not duplicated 60 times. Separately, `TelemetryWriter` persists a compact subset of the combined sample to PostgreSQL approximately every five seconds for future long-term analytics.
 
 ---
 
@@ -715,9 +775,8 @@ The application is still an early version.
 
 Current limitations include:
 
-- history exists only in memory
-- history is limited to 60 samples
-- no persistent database history
+- the live rolling history is still limited to 60 in-memory samples
+- PostgreSQL telemetry is persisted, but there is not yet a long-term analytics/query API or analytics page
 - no authentication
 - no process management actions
 - no GPU performance monitoring
@@ -726,7 +785,7 @@ Current limitations include:
 - packet capture / protocol-payload inspection is intentionally out of scope for the current version
 - current socket data does not directly attribute byte throughput to individual processes
 - reverse-DNS hostnames are best-effort and may be unavailable
-- no persistent historical graphs beyond the in-memory 60-sample window
+- no frontend historical graphs are yet backed by the PostgreSQL telemetry tables
 - Chart.js is currently loaded externally
 
 These limitations are expected to change as the project develops.
@@ -737,15 +796,14 @@ These limitations are expected to change as the project develops.
 
 Near-term development:
 
-- richer process details and diagnostics
+- build a telemetry query/service layer over PostgreSQL
+- add historical analytics for hours, days and longer time ranges
+- add aggregation/retention rules for older telemetry
 - navigation/layout cleanup as more pages are added
-- persistent history and historical analytics
 
 Possible later additions:
 
 - optional manufacturer/model-specific hardware enrichment
-- persistent monitoring history
-- SQLite/PostgreSQL storage
 - Windows service mode
 - GPU monitoring
 - disk-per-device monitoring
@@ -790,5 +848,13 @@ Topics covered or planned include:
 - data visualisation
 - software architecture
 - separation of concerns
+- worker/thread separation for fast and slow monitoring tasks
+- PostgreSQL
+- Django ORM models and QuerySets
+- database migrations
+- relational models, foreign keys and indexes
+- database transactions and atomicity
+- volatile vs durable state
+- telemetry persistence and sampling cadence
 
 More detailed documentation can be found in the `docs/` directory.

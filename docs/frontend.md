@@ -1445,6 +1445,28 @@ flowchart LR
 
 ---
 
+# Process Snapshot Freshness
+
+The Processes page still consumes `/api/processes/` in the same way, but the backend source has changed.
+
+Full process enumeration is expensive on Windows, so a `ProcessSnapshotWorker` now refreshes process information independently and caches the result. The frontend therefore does **not** cause another process scan when it polls.
+
+```text
+ProcessSnapshotWorker
+        ↓
+cached process snapshot
+        ↓
+/api/processes/
+        ↓
+processes.js
+        ↓
+table / tree / graph
+```
+
+This means process values may refresh more slowly than the one-second CPU/RAM/disk/network cards. The difference is deliberate and keeps the main live dashboard responsive.
+
+---
+
 # Interactive Process Graph
 
 The Processes page now has a third **Graph** view in addition to the Table and expandable Tree views. It reuses the same flat process objects returned by `/api/processes/`.
@@ -1634,14 +1656,14 @@ The frontend is intentionally still simple.
 
 Current limitations include:
 
-* CPU, memory, disk and network have short live history graphs, but no persistent long-term history
+* PostgreSQL now stores persistent telemetry, but the frontend does not yet query or visualise long-term database history
 * process details are currently limited to name, PID, PPID, CPU and memory
 * memory does not yet expose Windows-specific cache/standby, pool or page-fault counters
 * disk does not yet attribute live I/O to individual processes or physical devices
 * network inspection intentionally remains socket-level; packet/payload capture is outside the current frontend scope
 * network throughput is not yet attributed directly to each process
 * no user-selectable refresh rate
-* no persistent chart history
+* no analytics/time-range UI over PostgreSQL telemetry yet
 * Chart.js currently loads from an external CDN
 * polling rather than server-pushed updates
 * limited loading/error UI
@@ -1650,7 +1672,7 @@ Current limitations include:
 
 # Planned Frontend Development
 
-Near-term frontend work can now focus on persistent historical analytics, richer resource diagnostics and a cleaner Resources navigation group.
+Near-term frontend work can now focus on an Analytics page backed by PostgreSQL telemetry, including time-range selection, historical charts, averages/peaks/totals and a cleaner Resources navigation group.
 
 ---
 

@@ -53,8 +53,11 @@ flowchart TD
     Memory --> Sampler
     Disk --> Sampler
     Network --> Sampler
-    Processes --> Sampler
     SelfMonitor --> Sampler
+
+    Processes --> ProcessWorker[ProcessSnapshotWorker]
+    ProcessWorker --> Service[BackgroundMonitoringService]
+    Sampler --> Service
 
     Hardware --> HardwareService[HardwareService]
 ```
@@ -1294,6 +1297,32 @@ src/collectors/processes.py
 
 The process collector is more complicated than the other collectors because Windows may have hundreds of processes running simultaneously.
 
+The collector itself still has one responsibility: enumerate accessible Windows processes and return process data. Profiling showed that requesting data for hundreds of processes can take around 1.5 seconds on the development PC.
+
+For that reason, `get_processes()` is no longer called directly inside the fast one-second `SystemSampler`. It is executed by:
+
+```text
+src/monitoring/process_worker.py
+```
+
+The `ProcessSnapshotWorker` refreshes process information independently and exposes a cached snapshot to `BackgroundMonitoringService`.
+
+```text
+processes.py
+    ↓
+expensive process enumeration
+    ↓
+ProcessSnapshotWorker
+    ↓
+cached process snapshot
+    ↓
+BackgroundMonitoringService
+    ↓
+Overview / Processes / Memory / Network
+```
+
+This keeps the collector simple while moving its expensive execution off the critical system-sampling path.
+
 Current process information includes:
 
 ```python
@@ -1942,6 +1971,8 @@ Current limitations include:
 
 ## Processes
 
+* full process enumeration is relatively expensive on Windows and therefore refreshes independently from the one-second system sample
+* cached process information can be slightly older than the newest CPU/RAM/disk/network sample
 * no thread information
 * no handle counts
 * no executable path in the dashboard

@@ -132,23 +132,20 @@ Using the `DOC_PAGES` registry also means the URL value is not blindly treated a
 ```mermaid
 flowchart LR
     Browser["Browser / Client"]
-
     Router["Django URL Router"]
-
-    View["system_api()"]
-
+    View["Django API View"]
     Service["BackgroundMonitoringService"]
-
     Sampler["SystemSampler"]
-
+    Processes["ProcessSnapshotWorker"]
     History["MonitorHistory"]
 
-    Browser -- "GET /api/system/" --> Router
+    Browser --> Router
     Router --> View
     View --> Service
 
-    Service --> Sampler
-    Service --> History
+    Sampler --> Service
+    Processes --> Service
+    History --> Service
 
     Service --> View
     View -- "JSON" --> Browser
@@ -1864,20 +1861,59 @@ Versioning is unnecessary for the current early development stage.
 
 ---
 
+# Live API State vs Persistent Telemetry
+
+The existing monitoring APIs still serve **live background state**. They do not currently query PostgreSQL.
+
+```text
+SystemSampler + ProcessSnapshotWorker
+        ↓
+BackgroundMonitoringService
+        ↓
+latest sample + MonitorHistory
+        ↓
+/api/system/
+/api/processes/
+/api/memory/
+/api/disk/
+/api/network/
+/api/self/
+```
+
+In parallel:
+
+```text
+combined sample
+    ↓
+TelemetryWriter
+    ↓
+Django ORM
+    ↓
+PostgreSQL
+```
+
+PostgreSQL currently stores durable telemetry for future analytics, but there is not yet an endpoint such as:
+
+```text
+/api/analytics/
+/api/history/?from=...&to=...
+```
+
+This separation prevents the fast live pages from depending on historical database queries.
+
+The process endpoints also read a cached `ProcessSnapshotWorker` result. Process information can therefore refresh at a slower cadence than CPU/RAM/disk/network values without triggering a new Windows process scan for each HTTP request.
+
+---
+
 # Current Limitations
 
 The API currently has several intentional limitations.
 
-## Small Number of Coarse-Grained Endpoints
+## Small Read-Only Endpoint Set
 
-The application currently exposes two monitoring endpoints:
+The application now exposes focused live endpoints for the overview, processes, memory, disk, network, self-overhead and hardware features.
 
-```text
-/api/system/
-/api/processes/
-```
-
-This is still deliberately simple. More specialised CPU, memory, disk, network and history endpoints may be added only when the UI needs them.
+The API is still deliberately small: there is no historical analytics endpoint, dedicated CPU endpoint, write API or management API.
 
 ---
 
@@ -1893,14 +1929,9 @@ yet.
 
 ---
 
-## CPU-Only History Serialization
+## Overview Endpoint History Is CPU-Only
 
-The internal samples contain other metrics, but API history currently exposes only:
-
-```text
-timestamp
-cpu_percent
-```
+`/api/system/` serializes only timestamp + CPU percentage for its rolling history. Dedicated Memory, Disk and Network endpoints expose their own short histories, but there is not yet a generic long-term historical query API.
 
 ---
 
@@ -1918,9 +1949,11 @@ specific time range
 
 ---
 
-## No Persistent History
+## No Persistent-History API Yet
 
-History disappears when the application restarts.
+The `telemetry` app now persists compact historical samples to PostgreSQL, so durable data exists beyond application restarts.
+
+However, the current API does not query those tables yet. Long-term time-range queries and analytics endpoints are the next API layer to build.
 
 ---
 
@@ -1970,9 +2003,11 @@ Current and possible future API structure:
 ├── hardware/      # current
 ├── memory/        # current
 ├── disk/          # current
+├── network/       # current
+├── self/          # current
 ├── cpu/           # possible future
-├── network/       # possible future
-└── history/       # possible future
+├── history/       # possible future
+└── analytics/     # possible future
 ```
 
 ---
@@ -2213,6 +2248,18 @@ The explanatory text is property-driven. For example, two equal-capacity RAM mod
 
 ---
 # `GET /api/processes/`
+
+
+The endpoint returns the latest cached process snapshot produced by `ProcessSnapshotWorker`. It does not enumerate Windows processes during the HTTP request.
+
+The current service response also includes process-snapshot metadata such as:
+
+```text
+ready
+collection_duration_ms
+```
+
+`ready` indicates whether the worker has completed at least one useful process snapshot. `collection_duration_ms` records how long the most recent process enumeration took.
 
 The dedicated Processes page uses a separate endpoint for the complete live process list.
 
@@ -2664,10 +2711,8 @@ The current API is deliberately small and reads from one continuously updated ba
 
 ```text
 /api/cpu/
-/api/processes/
 /api/history/
-/api/network/
-/api/disks/
+/api/analytics/
 ```
 
 The next document, `frontend.md`, explains what happens after the JSON reaches the browser: Django templates, static files, DOM manipulation, asynchronous `fetch()`, polling, data formatting, and Chart.js visualisation.

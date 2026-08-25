@@ -5,6 +5,9 @@ import time
 
 from monitoring.history import MonitorHistory
 from monitoring.sampler import SystemSampler
+from monitoring.process_worker import (
+    ProcessSnapshotWorker,
+)
 
 from collectors.hardware import (
     get_hardware_info,
@@ -24,6 +27,16 @@ import socket
 
 from concurrent.futures import (
     ThreadPoolExecutor,
+)
+
+import logging
+
+from telemetry.writer import (
+    TelemetryWriter,
+)
+
+logger = logging.getLogger(
+    __name__
 )
 
 class HostnameResolver:
@@ -176,13 +189,33 @@ class BackgroundMonitoringService:
         self,
         sample_interval=1.0,
         history_size=60,
+        process_refresh_interval=3.0,
     ):
         self.sample_interval = sample_interval
 
+        # Fast system metrics:
+        # CPU, RAM, disk/network counters, interfaces,
+        # cached sockets and Sys Monitor self-overhead.
         self.sampler = SystemSampler()
+
+        # Process enumeration is relatively expensive on
+        # Windows, so it runs independently from the main
+        # one-second sampler.
+        self.process_worker = (
+            ProcessSnapshotWorker(
+                refresh_interval=
+                    process_refresh_interval
+            )
+        )
 
         self.history = MonitorHistory(
             max_samples=history_size
+        )
+
+        self.telemetry_writer = (
+            TelemetryWriter(
+                write_interval_seconds=5.0
+            )
         )
 
         self.latest_sample = None
@@ -201,9 +234,13 @@ class BackgroundMonitoringService:
 
     def start(self):
         """
-        Start the background monitoring thread.
+        Start background monitoring.
 
         Calling this more than once is safe.
+
+        The process worker owns process CPU priming and
+        process enumeration. SystemSampler owns the fast
+        system-level baselines.
         """
 
         with self._lock:
@@ -211,13 +248,33 @@ class BackgroundMonitoringService:
             if self._started:
                 return
 
-            # Establish CPU, process, disk and
-            # network baselines.
-            self.sampler.prime()
-
             self._stop_event.clear()
 
             self._ready_event.clear()
+
+            self.latest_error = None
+
+
+            try:
+
+                # Start process monitoring separately so its
+                # expensive enumeration does not block the
+                # one-second system sampler.
+                self.process_worker.start()
+
+                # Establish CPU, disk, network and self-monitor
+                # baselines for the fast sampler.
+                self.sampler.prime()
+
+            except Exception:
+
+                # If startup fails after the worker starts,
+                # make sure we do not leave an orphan worker
+                # thread running.
+                self.process_worker.stop()
+
+                raise
+
 
             self._started = True
 
@@ -233,7 +290,7 @@ class BackgroundMonitoringService:
 
     def stop(self):
         """
-        Ask the monitoring thread to stop.
+        Ask both monitoring workers to stop cleanly.
         """
 
         with self._lock:
@@ -248,9 +305,14 @@ class BackgroundMonitoringService:
 
         if (
             thread is not None
-            and thread is not threading.current_thread()
+            and
+            thread is not threading.current_thread()
         ):
-            thread.join(timeout=2)
+            thread.join(timeout=3)
+
+
+        # Process monitoring has its own worker thread.
+        self.process_worker.stop()
 
 
         with self._lock:
@@ -262,28 +324,117 @@ class BackgroundMonitoringService:
 
     def _run(self):
         """
-        Background sampling loop.
+        Main fast sampling loop.
+
+        The target is approximately one sample start per
+        sample_interval. Work time is subtracted from the
+        next wait rather than added on top of the interval.
+
+        Process information is read from the independent
+        ProcessSnapshotWorker cache.
         """
 
         previous_time = time.perf_counter()
 
 
-        while not self._stop_event.wait(
+        # Give the primed cumulative counters a real time
+        # window before taking the first rate-based sample.
+        if self._stop_event.wait(
             self.sample_interval
         ):
+            return
 
-            current_time = time.perf_counter()
+
+        while not self._stop_event.is_set():
+
+            cycle_started = time.perf_counter()
 
             elapsed_seconds = (
-                current_time - previous_time
+                cycle_started
+                -
+                previous_time
             )
+
+            previous_time = cycle_started
+
+            sample = None
 
 
             try:
 
-                sample = self.sampler.sample(
-                    elapsed_seconds=elapsed_seconds
+                process_snapshot = (
+                    self.process_worker
+                    .get_snapshot()
                 )
+
+
+                sample = self.sampler.sample(
+                    elapsed_seconds=
+                        elapsed_seconds,
+
+                    processes=
+                        process_snapshot[
+                            "processes"
+                        ],
+                )
+
+
+                # Keep the public/internal sample contract the
+                # same as before even though the data now comes
+                # from a separate worker.
+                sample["processes"] = {
+                    "count":
+                        len(
+                            process_snapshot[
+                                "processes"
+                            ]
+                        ),
+
+                    "top_cpu":
+                        process_snapshot[
+                            "top_cpu"
+                        ],
+
+                    "top_memory":
+                        process_snapshot[
+                            "top_memory"
+                        ],
+
+                    "items":
+                        process_snapshot[
+                            "processes"
+                        ],
+
+                    "collection_duration_ms":
+                        process_snapshot[
+                            "collection_duration_ms"
+                        ],
+
+                    "ready":
+                        process_snapshot[
+                            "ready"
+                        ],
+                }
+
+
+                # Expose the slow worker timing separately from
+                # SystemSampler.sample_duration_ms.
+                sample["self_monitor"][
+                    "process_collection_duration_ms"
+                ] = (
+                    process_snapshot[
+                        "collection_duration_ms"
+                    ]
+                )
+
+                sample["self_monitor"][
+                    "process_snapshot_ready"
+                ] = (
+                    process_snapshot[
+                        "ready"
+                    ]
+                )
+
 
                 history_sample = (
                     self._create_history_sample(
@@ -311,8 +462,57 @@ class BackgroundMonitoringService:
 
                     self.latest_error = error
 
+                logger.exception(
+                    "Background monitoring "
+                    "sample failed."
+                )
 
-            previous_time = current_time
+
+            # Persistence is intentionally isolated from live
+            # monitoring. A PostgreSQL problem must not stop
+            # the dashboard from receiving new live samples.
+            if sample is not None:
+
+                try:
+
+                    self.telemetry_writer.write_if_due(
+                        sample
+                    )
+
+                except Exception:
+
+                    logger.exception(
+                        "Telemetry persistence failed. "
+                        "Live monitoring will continue."
+                    )
+
+
+            # Fixed-rate-ish scheduling:
+            #
+            # target interval = 1.0 s
+            # sample work     = 0.05 s
+            # remaining wait  = 0.95 s
+            #
+            # This avoids the old behaviour where a 1 second
+            # wait was added after the collection duration.
+            work_seconds = (
+                time.perf_counter()
+                -
+                cycle_started
+            )
+
+            remaining_seconds = max(
+                self.sample_interval
+                -
+                work_seconds,
+                0.0,
+            )
+
+
+            if self._stop_event.wait(
+                remaining_seconds
+            ):
+                break
 
 
     def _create_history_sample(
@@ -324,7 +524,7 @@ class BackgroundMonitoringService:
         history.
 
         We deliberately do not keep the complete
-        process list in every history entry.
+        process list or socket list in every history entry.
         """
 
         return {
@@ -356,7 +556,15 @@ class BackgroundMonitoringService:
 
             "processes": {
                 "count":
-                    sample["processes"]["count"],
+                    sample["processes"][
+                        "count"
+                    ],
+
+                "ready":
+                    sample["processes"].get(
+                        "ready",
+                        False,
+                    ),
             },
 
             "self_monitor": {
@@ -388,6 +596,13 @@ class BackgroundMonitoringService:
                     sample[
                         "self_monitor"
                     ]["sample_duration_ms"],
+
+                "process_collection_duration_ms":
+                    sample[
+                        "self_monitor"
+                    ].get(
+                        "process_collection_duration_ms"
+                    ),
             },
         }
 
@@ -400,15 +615,15 @@ class BackgroundMonitoringService:
         If monitoring has not started yet,
         start it.
 
-        The first caller may wait briefly for
-        the initial useful sample.
+        The fast system sampler does not wait for the
+        slower process worker to produce its first snapshot.
         """
 
         self.start()
 
 
         if not self._ready_event.wait(
-            timeout=3.0
+            timeout=10.0
         ):
 
             with self._lock:
@@ -472,22 +687,38 @@ class BackgroundMonitoringService:
 
             "processes": {
                 "count":
-                    sample["processes"]["count"],
+                    sample["processes"][
+                        "count"
+                    ],
 
                 "top_cpu":
-                    sample["processes"]["top_cpu"],
+                    sample["processes"][
+                        "top_cpu"
+                    ],
 
                 "top_memory":
-                    sample["processes"]["top_memory"],
+                    sample["processes"][
+                        "top_memory"
+                    ],
+
+                "ready":
+                    sample["processes"].get(
+                        "ready",
+                        False,
+                    ),
             },
 
             "history": [
                 {
                     "timestamp":
-                        item["timestamp"].isoformat(),
+                        item[
+                            "timestamp"
+                        ].isoformat(),
 
                     "cpu_percent":
-                        item["cpu"]["percent"],
+                        item[
+                            "cpu"
+                        ]["percent"],
                 }
 
                 for item in history
@@ -498,6 +729,10 @@ class BackgroundMonitoringService:
     def get_process_data(self):
         """
         Data used by /api/processes/.
+
+        The process list is a cached snapshot produced by
+        ProcessSnapshotWorker, not a new process enumeration
+        triggered by this API request.
         """
 
         sample, _ = (
@@ -507,13 +742,29 @@ class BackgroundMonitoringService:
 
         return {
             "timestamp":
-                sample["timestamp"].isoformat(),
+                sample["timestamp"]
+                .isoformat(),
 
             "count":
-                sample["processes"]["count"],
+                sample["processes"][
+                    "count"
+                ],
+
+            "ready":
+                sample["processes"].get(
+                    "ready",
+                    False,
+                ),
+
+            "collection_duration_ms":
+                sample["processes"].get(
+                    "collection_duration_ms"
+                ),
 
             "processes":
-                sample["processes"]["items"],
+                sample["processes"][
+                    "items"
+                ],
         }
 
 
@@ -521,8 +772,8 @@ class BackgroundMonitoringService:
         """
         Data used by /api/memory/.
 
-        No new system collection happens here.
-        We only read the latest background sample.
+        No new system or process collection happens here.
+        We only read the latest background snapshots.
         """
 
         sample, history = (
@@ -531,7 +782,9 @@ class BackgroundMonitoringService:
 
 
         processes = (
-            sample["processes"]["items"]
+            sample["processes"][
+                "items"
+            ]
         )
 
 
@@ -553,10 +806,14 @@ class BackgroundMonitoringService:
             "memory":
                 sample["memory"],
 
-
             "top_processes":
                 top_memory,
 
+            "processes_ready":
+                sample["processes"].get(
+                    "ready",
+                    False,
+                ),
 
             "history": [
                 {
@@ -647,6 +904,7 @@ class BackgroundMonitoringService:
             ],
         }
 
+
     def get_network_data(self):
 
         sample, history = (
@@ -671,7 +929,9 @@ class BackgroundMonitoringService:
         for connection in connections:
 
             remote = (
-                connection["remote"]
+                connection[
+                    "remote"
+                ]
             )
 
 
@@ -785,6 +1045,7 @@ class BackgroundMonitoringService:
             ],
         }
 
+
     def get_self_data(self):
         """
         Return the overhead of the Sys Monitor
@@ -847,6 +1108,13 @@ class BackgroundMonitoringService:
                         ][
                             "sample_duration_ms"
                         ],
+
+                    "process_collection_duration_ms":
+                        item[
+                            "self_monitor"
+                        ].get(
+                            "process_collection_duration_ms"
+                        ),
                 }
 
                 for item in history
@@ -857,6 +1125,7 @@ class BackgroundMonitoringService:
                 )
             ],
         }
+
 
 hostname_resolver = (
     HostnameResolver()
